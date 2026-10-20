@@ -832,12 +832,6 @@ img, video { max-width: 100%; height: auto; }
               <button onclick="window.openBulkImageModal()" class="bg-pink-600 hover:bg-pink-700 text-white px-3 py-2 rounded-xl text-xs font-bold btn-touch shadow-xs flex items-center gap-1">
                 🖼️ นำเข้ารูป(ชุด)
               </button>
-              <button onclick="window.openImageManager()" class="bg-sky-600 hover:bg-sky-700 text-white px-3 py-2 rounded-xl text-xs font-bold btn-touch shadow-xs flex items-center gap-1">
-                🔍 ตรวจ/จัดการรูปใน Storage
-              </button>
-              <button onclick="window.suggestProductGroups()" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-xl text-xs font-bold btn-touch shadow-xs flex items-center gap-1">
-                🤖 ตรวจหากลุ่มสินค้า
-              </button>
               <button onclick="window.exportProductsToExcel()" class="bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 rounded-xl text-xs font-bold btn-touch shadow-xs flex items-center gap-1">
                 📤 ส่งออก Excel
               </button>
@@ -1006,7 +1000,7 @@ img, video { max-width: 100%; height: auto; }
 
           <div class="border-t pt-3">
             <h4 class="text-xs font-bold text-slate-500 mb-2">เลือกรายการสินค้าเพื่อรับเข้า</h4>
-            <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 mb-3 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-3 text-xs">
               <div class="sm:col-span-2 relative">
                 <input type="text" id="po-product-search" placeholder="🔍 พิมพ์ชื่อ / SKU / บาร์โค้ดเพื่อค้นหาสินค้า..." autocomplete="off"
                   oninput="window.filterPOProductPicker()" onfocus="window.filterPOProductPicker()"
@@ -1014,11 +1008,8 @@ img, video { max-width: 100%; height: auto; }
                 <input type="hidden" id="po-product-picker-value">
                 <div id="po-product-picker-results" class="hidden absolute z-20 top-full left-0 right-0 bg-white border rounded-xl shadow-xl mt-1 max-h-72 overflow-y-auto"></div>
               </div>
-              <select id="po-variant-select" onchange="window.onPOVariantChange()" class="bg-slate-50 border p-2.5 rounded-xl font-bold text-slate-800 outline-none" aria-label="เลือกรุ่นหรือขนาดสินค้า">
-                <option value="">เลือกรุ่น/ขนาด</option>
-              </select>
-              <input type="number" id="po-item-qty" min="0.001" step="any" placeholder="จำนวนรับเข้า" class="bg-slate-50 border p-2.5 rounded-xl font-bold text-center outline-none">
-              <input type="number" id="po-item-cost" min="0" step="any" placeholder="ราคาทุนต่อหน่วย" class="bg-slate-50 border p-2.5 rounded-xl font-bold text-center outline-none">
+              <input type="number" id="po-item-qty" placeholder="จำนวนรับเข้า" class="bg-slate-50 border p-2.5 rounded-xl font-bold text-center outline-none">
+              <input type="number" id="po-item-cost" placeholder="ราคาทุนบิลนี้" class="bg-slate-50 border p-2.5 rounded-xl font-bold text-center outline-none">
             </div>
             <button onclick="window.addItemToPOList()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs btn-touch">
               + เพิ่มรายการเข้าใบรับของ
@@ -1074,22 +1065,6 @@ img, video { max-width: 100%; height: auto; }
       <!-- VIEW 4: SALES / RECEIVABLES / RETURNS (รวมขาย, ลูกหนี้, ยอดค้าง, ใบเสร็จ, คืนสินค้า) -->
       <section id="view-history" class="view-content hidden fade-in space-y-4">
         <h3 class="text-xl font-extrabold text-slate-800">🧾 ขาย, ลูกหนี้ & คืนสินค้า</h3>
-
-        <div class="bg-white p-4 rounded-3xl border shadow-sm">
-          <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2 mb-3">
-            <h4 class="text-sm font-extrabold text-emerald-700">📈 รายงานกำไรขั้นต้นจาก Supabase</h4>
-            <button type="button" onclick="window.loadProfitReport()" class="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold">โหลดรายงาน</button>
-          </div>
-          <p class="text-xs text-slate-500 mb-3">คำนวณจากราคาทุนที่บันทึกไว้ ณ เวลาขาย หักยอดคืนและต้นทุนสินค้าที่คืน ไม่ใช่กำไรสุทธิหลังค่าใช้จ่าย</p>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
-            <label class="text-xs font-bold text-slate-600">ตั้งแต่วันที่<input id="profit-from" type="date" class="block w-full mt-1 border rounded-xl p-2 text-sm"></label>
-            <label class="text-xs font-bold text-slate-600">ถึงวันที่<input id="profit-to" type="date" class="block w-full mt-1 border rounded-xl p-2 text-sm"></label>
-            <div class="flex items-end"><button type="button" onclick="window.loadProfitReport()" class="w-full px-3 py-2 rounded-xl bg-slate-800 text-white text-sm font-bold">ค้นหาตามช่วงวันที่</button></div>
-          </div>
-          <div id="profit-report-status" class="text-xs text-slate-500 mb-2" role="status">กดโหลดรายงานเพื่ออ่านข้อมูลจากฐานข้อมูล</div>
-          <div id="profit-report-summary" class="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3"></div>
-          <div class="overflow-x-auto"><table class="w-full text-xs min-w-[760px]"><thead class="bg-slate-50 text-slate-600"><tr><th class="p-2 text-left">วันที่</th><th class="p-2 text-left">เลขที่บิล</th><th class="p-2 text-left">วิธีชำระ</th><th class="p-2 text-right">ยอดสุทธิ</th><th class="p-2 text-right">ต้นทุนสุทธิ</th><th class="p-2 text-right">กำไรขั้นต้น</th><th class="p-2 text-center">ต้นทุน</th></tr></thead><tbody id="profit-report-rows"><tr><td colspan="7" class="p-3 text-center text-slate-400">ยังไม่มีข้อมูลรายงาน</td></tr></tbody></table></div>
-        </div>
 
         <div class="bg-white p-4 rounded-3xl border shadow-sm">
           <h4 class="text-sm font-extrabold text-rose-700 border-b pb-2 mb-3">💰 ลูกหนี้การค้า & ยอดค้างชำระ</h4>
@@ -2209,9 +2184,6 @@ window.formatMoney = formatMoney;
       };
 
       // Unified first-owner bootstrap: there is no separate setup modal or wizard.
-      // Important security note: PIN-only employee selection is client-side attribution;
-      // it is not a separate Supabase identity. The linked Supabase Auth account is the
-      // database security boundary, so do not share that Auth credential outside the shop.
       // New-account metadata stores only the PIN hash, never the raw PIN.
       window.checkAndBootstrapOwner = async function() {
         const client = window.getSupabaseClient();
@@ -2571,35 +2543,88 @@ window.formatMoney = formatMoney;
         if (!client) return false;
 
         try {
-          // 1. Shifts: only create OPEN shifts through the validated RPC. Closed shifts must
-          // be finalized by close_shift; the browser never upserts shift state directly.
-          for (const s of (db.shifts || []).filter(x => !x.endTime)) {
-            const { error } = await client.rpc('open_shift', {
-              p_shift_id: toUUID(s.id), p_opening_cash: roundAmt(s.openingCash),
-              p_opened_at: new Date(s.startTime).toISOString()
-            });
-            if (error) throw error;
+          // 1. Shifts — column names in this schema: opening_cash/closing_cash (not
+          // starting_cash/ending_cash), opened_at/closed_at, status 'OPEN'/'CLOSED' (uppercase).
+          const shiftRows = (db.shifts || []).map(s => ({
+            id: toUUID(s.id),
+            opened_at: new Date(s.startTime).toISOString(),
+            closed_at: s.endTime ? new Date(s.endTime).toISOString() : null,
+            opening_cash: roundAmt(s.openingCash),
+            closing_cash: s.cashOnHand ? roundAmt(s.cashOnHand) : null,
+            status: s.endTime ? 'CLOSED' : 'OPEN'
+          }));
+          if (shiftRows.length > 0) {
+            const { error: shiftErr } = await client.from('shifts').upsert(shiftRows, { onConflict: 'id' });
+            if (shiftErr) throw shiftErr;
           }
 
           // 2. Bills — (v10) ไม่เขียนบิลตรงเข้าตารางอีกต่อไป: บิลทั้งหมดไปทาง create_sale (คิวซิงค์) เท่านั้น
           //    เพื่อให้เซิร์ฟเวอร์ตรวจสต็อก/วงเงิน/ส่วนลดเสมอ ไม่มี fallback ที่ข้ามกฎได้
 
-          // 3. Cash drawer manual movements: append-only RPC with server-side open-shift check.
-          // AR receipts and refunds already have their own transaction RPCs; never mirror them here.
-          for (const s of (db.shifts || [])) {
-            for (const m of (s.movements || [])) {
-              if (m._viaRpc) continue;
-              const { error } = await client.rpc('record_cash_movement', {
-                p_shift_id: toUUID(s.id), p_op_ref: String(m.id), p_type: m.type,
-                p_amount: roundAmt(m.amount), p_note: m.note || null,
-                p_created_at: new Date(m.time).toISOString()
+          // 3. Cash Ledger — real cash-drawer movements only (AR payments received, cash
+          // refunds, and manual cash-in/cash-out recorded during a shift). id is synthesized
+          // per source since these were never given a stable id shaped for toUUID() the way
+          // bills/products are.
+          const cashLedgerRows = [];
+          (db.cashLedger || []).forEach(cl => {
+            if (!cl._viaRpc && (cl.type === 'cash-in-ar' || cl.type === 'expense-refund')) {   // รายการที่ไปทาง RPC แล้วห้ามส่งซ้ำ
+              cashLedgerRows.push({
+                id: toUUID(cl.id),
+                shift_id: cl.shiftId ? toUUID(cl.shiftId) : null,
+                type: cl.type,
+                income: roundAmt(cl.income || 0),
+                expense: roundAmt(cl.expense || 0),
+                description: cl.description || null,
+                ref_id: cl.refId || null,
+                created_at: new Date(cl.time).toISOString()
               });
-              if (error) throw error;
             }
+            // 'ACCOUNTS_PAYABLE' entries are handled separately below (accounts_payable table) —
+            // they represent a balance owed, not a cash-drawer movement, so they don't belong here.
+          });
+          (db.shifts || []).forEach(s => {
+            (s.movements || []).forEach(m => {
+              cashLedgerRows.push({
+                id: toUUID(m.id),
+                shift_id: toUUID(s.id),
+                type: m.type === 'IN' ? 'SHIFT_CASH_IN' : 'SHIFT_CASH_OUT',
+                income: m.type === 'IN' ? roundAmt(m.amount) : 0,
+                expense: m.type === 'OUT' ? roundAmt(m.amount) : 0,
+                description: m.note || null,
+                ref_id: null,
+                created_at: new Date(m.time).toISOString()
+              });
+            });
+          });
+          if (cashLedgerRows.length > 0) {
+            const { error: cashErr } = await client.from('cash_ledger').upsert(cashLedgerRows, { onConflict: 'id' });
+            if (cashErr) throw cashErr;
           }
 
-          // 4. Accounts payable are created atomically by receive_goods(). Do not upsert
-          // accounts_payable from the browser; that could fabricate or overwrite liabilities.
+          // 4. Accounts Payable — outstanding supplier debt from goods receipts
+          // (window.confirmReceivePO). purchase_order_id links to the purchase_orders row
+          // created by that receipt's own background sync (window.syncGoodsReceiptToSupabase),
+          // which stores its server-generated id back onto the AP entry as
+          // _serverPurchaseOrderId — already a real Supabase uuid, so it's used as-is rather
+          // than passed through toUUID(). Falls back to null if that sync hasn't completed yet
+          // (offline, or still in flight) — the next sync pass will fill it in once it has.
+          const apRows = (db.cashLedger || [])
+            .filter(cl => cl.type === 'ACCOUNTS_PAYABLE')
+            .map(ap => ({
+              id: toUUID(ap.id),
+              supplier_id: ap.supplierId ? toUUID(ap.supplierId) : null,
+              purchase_order_id: ap._serverPurchaseOrderId || null,
+              doc_ref: ap.docRef || null,
+              amount: roundAmt(ap.amount || 0),
+              credit_terms: ap.terms || 30,
+              status: ap.status || 'OPEN',
+              created_at: new Date(ap.createdAt).toISOString(),
+              paid_at: ap.paidAt ? new Date(ap.paidAt).toISOString() : null
+            }));
+          if (apRows.length > 0) {
+            const { error: apErr } = await client.from('accounts_payable').upsert(apRows, { onConflict: 'id' });
+            if (apErr) throw apErr;
+          }
 
           return true;
         } catch (err) {
@@ -3314,7 +3339,7 @@ window.formatMoney = formatMoney;
           return alert("กรณีค้างชำระ จำเป็นต้องเลือกชื่อลูกค้าก่อนบันทึก");
         }
 
-        // Credit-limit check — create_sale also validates the limit inside the database RPC
+        // Credit-limit check — this schema's create_sale RPC does not enforce credit_limit
         // itself (it only carries the column), so this client-side check is the only
         // enforcement there is; per the manual's "ตรวจสอบวงเงินเครดิต" description, previously
         // this wasn't enforced client-side at all either, so bills could exceed a customer's
@@ -3952,95 +3977,6 @@ window.formatMoney = formatMoney;
         return a.slice(0, i).trim();
       }
 
-      // สองวิธีตรวจจับกลุ่มสินค้า:
-      //  1) ชื่อคล้ายกันแต่ท้ายชื่อมีขนาด/สี/หน่วยต่างกัน (getProductBaseName ตัดท้ายออก)
-      //  2) รูปภาพเดียวกันเป๊ะ (imageUrl ตรงกัน) — เผื่อกรณีชื่อไม่คล้ายกันเลยแต่ใช้รูปสินค้า
-      //     ใบเดียวกันเพราะเป็นของชิ้นเดียวกันจริงๆ (เช่นตั้งชื่อรุ่นไว้คนละแบบ)
-      // ถ้ากลุ่มไหนตรวจพบจากทั้งสองวิธีด้วยชุดสินค้าเดียวกันพอดี จะรวมเป็นการ์ดเดียว ไม่ขึ้นซ้ำ
-      window.suggestProductGroups = function() {
-        const candidates = Object.values(db.products).filter(p => (p.variants || []).length <= 1);
-
-        // วิธีที่ 1: ชื่อคล้ายกัน
-        const byName = {};
-        candidates.forEach(p => {
-          const base = getProductBaseName(p.name);
-          if (base.length > 1) (byName[base] = byName[base] || []).push(p);
-        });
-        const nameSuggestions = Object.entries(byName)
-          .filter(([, items]) => items.length > 1)
-          .map(([base, items]) => ({ label: base, reason: 'ชื่อคล้ายกัน', items }));
-
-        // วิธีที่ 2: รูปภาพเดียวกัน (เฉพาะรูปจริง ไม่ใช่ emoji ว่างๆ ที่จะชนกันมั่ว)
-        const byImage = {};
-        candidates.forEach(p => {
-          const url = p.imageUrl;
-          if (url && /^(https?:|data:)/.test(url)) (byImage[url] = byImage[url] || []).push(p);
-        });
-        const imageSuggestions = Object.values(byImage)
-          .filter(items => items.length > 1)
-          .map(items => ({ label: getProductBaseName(items[0].name) || items[0].name, reason: 'รูปภาพเดียวกัน', items }));
-
-        // รวมสองชุดแรก: ถ้าชุดสินค้า (id) เหมือนกันเป๊ะทั้งสองวิธี ให้โชว์ใบเดียวแต่บอกเหตุผลทั้งคู่
-        const merged = [];
-        const keyOf = items => items.map(p => p.id).sort().join(',');
-        [...nameSuggestions, ...imageSuggestions].forEach(sug => {
-          const key = keyOf(sug.items);
-          const existing = merged.find(m => keyOf(m.items) === key);
-          if (existing) { if (!existing.reason.includes(sug.reason)) existing.reason += ' + ' + sug.reason; }
-          else merged.push({ ...sug });
-        });
-
-        // วิธีที่ 3 (fallback, มั่นใจน้อยกว่า): ชื่อที่ไม่ตรง pattern สี/ไซส์ที่รู้จักเลย แต่ขึ้นต้น
-        // เหมือนกันยาวมากจนน่าจะเป็นสินค้าเดียวกัน — รันเฉพาะกับสินค้าที่ยังไม่ถูกจับกลุ่มได้จาก
-        // 2 วิธีแรก เพื่อไม่ขึ้นซ้ำ และต้องคำนำหน้าเหมือนกัน ≥60% ของชื่อที่สั้นกว่า (อย่างน้อย 4 ตัวอักษร)
-        // ถึงจะเสนอ ป้ายกำกับ "ตรวจสอบก่อนรวม" ให้เห็นชัดว่าความมั่นใจต่ำกว่าสองวิธีแรก
-        const alreadyGrouped = new Set(merged.flatMap(m => m.items.map(p => p.id)));
-        const remaining = candidates.filter(p => !alreadyGrouped.has(p.id));
-        const fuzzyGroups = [];
-        const usedInFuzzy = new Set();
-        for (let i = 0; i < remaining.length; i++) {
-          if (usedInFuzzy.has(remaining[i].id)) continue;
-          const cluster = [remaining[i]];
-          for (let j = i + 1; j < remaining.length; j++) {
-            if (usedInFuzzy.has(remaining[j].id)) continue;
-            const prefix = longestCommonPrefix(remaining[i].name, remaining[j].name);
-            const shorterLen = Math.min(remaining[i].name.length, remaining[j].name.length);
-            if (prefix.length >= 4 && prefix.length >= shorterLen * 0.6) cluster.push(remaining[j]);
-          }
-          if (cluster.length > 1) {
-            cluster.forEach(p => usedInFuzzy.add(p.id));
-            const label = cluster.reduce((a, b) => longestCommonPrefix(a, b.name), cluster[0].name);
-            fuzzyGroups.push({ label: label || cluster[0].name, reason: 'ชื่อคล้ายกันบางส่วน — ตรวจสอบก่อนรวม', items: cluster, lowConfidence: true });
-          }
-        }
-        merged.push(...fuzzyGroups);
-
-        const el = document.getElementById('group-suggestions-list');
-        el.innerHTML = merged.length ? merged.map(({ label, reason, items, lowConfidence }) => `
-          <div class="bg-slate-50 p-3 rounded-xl border text-xs ${lowConfidence ? 'border-amber-300' : ''}">
-            <div class="flex justify-between items-center mb-1.5 gap-2">
-              <div class="min-w-0">
-                <b class="text-slate-800">${escapeHTML(label)} <span class="text-slate-400 font-normal">(${items.length} รายการ)</span></b>
-                <div class="text-[9px] ${lowConfidence ? 'text-amber-600' : 'text-indigo-500'} font-bold">${lowConfidence ? '⚠️' : '🔎'} ${escapeHTML(reason)}</div>
-              </div>
-              <button onclick='window.applyGroupSuggestion(${JSON.stringify(items.map(p => p.id))}, ${JSON.stringify(label)})' class="flex-shrink-0 text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2.5 py-1.5 rounded-lg btn-touch">✅ รวมกลุ่มนี้</button>
-            </div>
-            <div class="flex flex-wrap gap-1">${items.map(p => `<span class="bg-white border rounded-full px-2 py-0.5 text-[10px]">${escapeHTML(p.name)}</span>`).join('')}</div>
-          </div>
-        `).join('') : `<p class="text-center text-slate-400 font-bold py-6 text-xs">ไม่พบสินค้าที่ชื่อหรือรูปคล้ายกันพอจะจับกลุ่มได้ในตอนนี้</p>`;
-
-        document.getElementById('modal-group-suggestions').classList.remove('hidden');
-        document.getElementById('modal-group-suggestions').classList.add('flex');
-      };
-
-      window.applyGroupSuggestion = function(ids, base) {
-        if (!confirm(`รวม ${ids.length} รายการเป็นกลุ่ม "${base}"?`)) return;
-        if (!window.mergeProductsIntoGroup(ids, base)) return;
-        window.renderStockTable();
-        window.renderSaleHome?.();
-        window.showToast?.(`รวมกลุ่ม "${base}" สำเร็จ`);
-        window.suggestProductGroups(); // refresh the list — this group is now merged and gone
-      };
 
       // ==========================================
       // GOODS RECEIPT & MASTER SETTINGS
@@ -4054,21 +3990,10 @@ window.formatMoney = formatMoney;
       window.onPOProductChange = function() {
         const pid = document.getElementById('po-product-picker-value').value;
         const p = db.products[pid];
-        const select = document.getElementById('po-variant-select');
-        if (!select) return;
-        const variants = (p?.variants || []).filter(v => v && v.id);
-        select.innerHTML = variants.length ? variants.map(v => `<option value="${escapeHTML(v.id)}">${escapeHTML(v.sizeName || 'ปกติ')} · SKU ${escapeHTML(v.sku || '-')} · คงเหลือ ${Number(v.stock || 0)}</option>`).join('') : '<option value="">ไม่มีรุ่นสินค้า</option>';
-        select.disabled = variants.length === 0;
-        window.onPOVariantChange();
-      };
-
-      window.onPOVariantChange = function() {
-        const pid = document.getElementById('po-product-picker-value')?.value;
-        const p = db.products[pid];
-        const vid = document.getElementById('po-variant-select')?.value;
-        const v = (p?.variants || []).find(x => String(x.id) === String(vid));
-        document.getElementById('po-item-cost').value = v ? (Number(v.cost) || 0) : '';
-        if (v && !document.getElementById('po-item-qty').value) document.getElementById('po-item-qty').value = 1;
+        if (p && p.variants[0]) {
+          document.getElementById('po-item-cost').value = p.variants[0].cost;
+          document.getElementById('po-item-qty').value = 1;
+        }
       };
 
       window.filterPOProductPicker = function() {
@@ -4111,7 +4036,7 @@ window.formatMoney = formatMoney;
         const p = db.products[pid];
         if (!p) return;
         document.getElementById('po-product-picker-value').value = pid;
-        document.getElementById('po-product-search').value = p.name;
+        document.getElementById('po-product-search').value = p.name + (p.variants?.[0] ? ` (${p.variants[0].sizeName})` : '');
         document.getElementById('po-product-picker-results').classList.add('hidden');
         window.onPOProductChange();
       };
@@ -4132,7 +4057,7 @@ window.formatMoney = formatMoney;
         container.innerHTML = poTempItems.length ? poTempItems.map((item, idx) => `
           <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border text-xs">
             <div class="flex-1 min-w-0">
-              <b class="text-slate-800 block truncate">${escapeHTML(item.productName)} <span class="text-indigo-600">(${escapeHTML(item.variantName || 'รุ่นปกติ')})</span></b>
+              <b class="text-slate-800 block truncate">${escapeHTML(item.productName)}</b>
               <div class="flex items-center gap-1.5 mt-1">
                 <input type="number" min="0" step="any" value="${item.qty}" oninput="window.updatePOItemField(${idx},'qty',this.value)" class="w-16 border rounded-lg text-center py-1 font-bold outline-none focus:ring-2 focus:ring-indigo-500">
                 <span class="text-slate-400">ชิ้น ×</span>
@@ -4249,17 +4174,12 @@ window.formatMoney = formatMoney;
         if (!pid || qty <= 0) return window.showAlert ? window.showAlert("ข้อมูลไม่ครบ", "กรุณาค้นหาและเลือกสินค้า พร้อมระบุจำนวนให้ถูกต้อง", true) : alert("กรุณาเลือกสินค้าและระบุจำนวนให้ถูกต้อง");
 
         const p = db.products[pid];
-        const variantId = document.getElementById('po-variant-select').value;
-        const variant = (p?.variants || []).find(v => String(v.id) === String(variantId));
-        if (!p || !variant) return window.showAlert?.('เลือกรุ่นสินค้า', 'กรุณาเลือกสินค้ารุ่น/ขนาดที่จะรับเข้าให้ถูกต้อง', true);
-        poTempItems.push({ productId: pid, variantId: variant.id, variantName: variant.sizeName || 'ปกติ', productName: p.name, qty, cost, total: roundAmt(qty * cost) });
+        poTempItems.push({ productId: pid, productName: p.name, qty, cost, total: roundAmt(qty * cost) });
         window.renderPOCartList();
 
         // Reset the picker so the next item can be searched for immediately.
         document.getElementById('po-product-search').value = '';
         document.getElementById('po-product-picker-value').value = '';
-        document.getElementById('po-variant-select').innerHTML = '<option value="">เลือกรุ่น/ขนาด</option>';
-        document.getElementById('po-variant-select').disabled = true;
         document.getElementById('po-item-qty').value = '';
         document.getElementById('po-item-cost').value = '';
       };
@@ -4828,12 +4748,11 @@ window.formatMoney = formatMoney;
           _restock.push({ variantId: item.variantId, qty: returnQty * (item.multiplier || 1) });
 
           rpcItems.push({
-            product_id: item.id || null,
-            item_name: item.name || null,
             variant_id: item.variantId || null,
             fraction_id: item.fractionId || null,
             quantity: returnQty,
-            // Server recalculates the refundable unit price from the original bill.
+            // Send the actual refunded unit price after the original bill discount ratio,
+            // so the server-side refund total matches the amount shown to the cashier.
             unit_price: roundAmt(item.price * _ratio)
           });
         });
@@ -4872,7 +4791,7 @@ window.formatMoney = formatMoney;
         // ก็ยังถูกต้องในเครื่องเหมือนเดิม แค่รอ sync รอบถัดไปไม่ได้ (ไม่มี batch fallback สำหรับ
         // การคืนสินค้าในตอนนี้ เพราะต้องรู้ bill server-side id ก่อน — ปล่อยให้กดซิงค์ใหม่ได้จาก
         // ปุ่ม forceSyncNow ถ้าพลาดจริง)
-        window.enqueueSync({ type: 'return', payload: { billId: bill.id, items: rpcItems.map(i => ({ product_id: i.product_id, item_name: i.item_name, variant_id: i.variant_id, fraction_id: i.fraction_id, quantity: i.quantity, unit_price: i.unit_price })), restock: _restock, returnRef: creditNoteNo, shiftId: db.currentShift?.id || null, isCredit, customerId: bill.customerId, refund: refundTotal, fully: fullyReturned } });
+        window.enqueueSync({ type: 'return', payload: { billId: bill.id, items: rpcItems.map(i => ({ variant_id: i.variant_id, fraction_id: i.fraction_id, quantity: i.quantity, unit_price: i.unit_price })), restock: _restock, returnRef: creditNoteNo, shiftId: db.currentShift?.id || null, isCredit, customerId: bill.customerId, refund: refundTotal, fully: fullyReturned } });
       };
 
       window.syncReturnToSupabaseRPC = function() { /* v10: ใช้คิวซิงค์ (type 'return') แทน */ };
@@ -5975,8 +5894,7 @@ window.confirmReceivePO=async function(){if(!ok('GOODS_RECEIPT'))return;const su
       }catch(e){receipt.deliveryNoteUrls.push(f.dataUrl);console.warn('delivery note upload error, kept locally',e);}
     }
   }
-  for(const x of poTempItems){const p=db.products[x.productId],v=(p?.variants||[]).find(y=>String(y.id)===String(x.variantId));if(!v) return window.showAlert?.('รุ่นสินค้าไม่ถูกต้อง','ไม่พบรุ่นสินค้าที่ระบุในรายการรับเข้า: '+(x.productName||x.productId),true);}
-  db.purchaseOrders=db.purchaseOrders||[];db.purchaseOrders.push(receipt);for(const x of poTempItems){const p=db.products[x.productId],v=(p?.variants||[]).find(y=>String(y.id)===String(x.variantId));const _os=Math.max(0,+v.stock||0),_q=+x.qty||0,_nc=+x.cost||0;if(_q>0){v.cost=_os>0?roundAmt((_os*(+v.cost||0)+_q*_nc)/(_os+_q)):roundAmt(_nc);}v.stock=(+v.stock||0)+_q;}db.cashLedger=db.cashLedger||[];const apEntry={id:'AP-'+Date.now(),type:'ACCOUNTS_PAYABLE',supplierId,docRef,amount:poTempItems.reduce((a,x)=>a+x.total,0),terms,status:'OPEN',createdAt:receipt.receivedAt};db.cashLedger.push(apEntry);persist();const itemsForSync=receipt.items;poTempItems.length=0;window.renderPOCartList();window.renderStockTable();window.renderPurchaseHistory();window.clearDeliveryNote?.();window.showToast?.('รับสินค้าเข้าคลังและบันทึกเจ้าหนี้สำเร็จ');document.getElementById('po-doc-ref').value='';
+  db.purchaseOrders=db.purchaseOrders||[];db.purchaseOrders.push(receipt);for(const x of poTempItems){const p=db.products[x.productId],v=p?.variants?.[0];if(v){{const _os=Math.max(0,+v.stock||0),_q=+x.qty||0,_nc=+x.cost||0;if(_nc>0){v.cost=_os>0?roundAmt((_os*(+v.cost||0)+_q*_nc)/(_os+_q)):_nc;}v.stock=(+v.stock||0)+_q;}}}db.cashLedger=db.cashLedger||[];const apEntry={id:'AP-'+Date.now(),type:'ACCOUNTS_PAYABLE',supplierId,docRef,amount:poTempItems.reduce((a,x)=>a+x.total,0),terms,status:'OPEN',createdAt:receipt.receivedAt};db.cashLedger.push(apEntry);persist();const itemsForSync=receipt.items;poTempItems.length=0;window.renderPOCartList();window.renderStockTable();window.renderPurchaseHistory();window.clearDeliveryNote?.();window.showToast?.('รับสินค้าเข้าคลังและบันทึกเจ้าหนี้สำเร็จ');document.getElementById('po-doc-ref').value='';
   // Best-effort authoritative push to Supabase via the proper purchase_orders →
   // purchase_order_items → receive_purchase_order RPC flow (the schema's real, atomic
   // receiving path — it locks rows, validates received quantity against ordered quantity, and
@@ -6250,36 +6168,6 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
     try {
       if (typeof window.ensureShiftForClose !== 'function') throw new Error('ยังไม่ได้เปิดใช้ตัวเชื่อมต่อกะกับ Supabase');
       const shiftUuid = await window.ensureShiftForClose(s.id);
-      // Flush manual drawer movements before close_shift closes this shift.
-      for (const m of (s.movements || [])) {
-        if (m._viaRpc) continue;
-        const { error: movementError } = await c.rpc('record_cash_movement', {
-          p_shift_id: shiftUuid, p_op_ref: String(m.id), p_type: m.type,
-          p_amount: roundAmt(m.amount), p_note: m.note || null,
-          p_created_at: new Date(m.time).toISOString()
-        });
-        if (movementError) throw movementError;
-      }
-      // Reconcile against the database after pending manual movements have been flushed.
-      // The local summary is a preview only; the server ledger is authoritative.
-      const { data: reconciliation, error: reconciliationError } = await c.rpc('get_shift_reconciliation', {
-        p_shift_id: shiftUuid
-      });
-      if (reconciliationError) throw reconciliationError;
-      if (!reconciliation || reconciliation.shift_id !== shiftUuid) throw new Error('Supabase ไม่ได้ส่งผลกระทบยอดกะกลับมา');
-      if (reconciliation.status !== 'OPEN') throw new Error('กะนี้ไม่ได้อยู่ในสถานะเปิด จึงปิดซ้ำไม่ได้');
-      const serverExpected = roundAmt(Number(reconciliation.expected_cash));
-      const serverDiff = roundAmt(actual - serverExpected);
-      if (serverDiff !== 0 && !diffNote) {
-        const noteWrap = document.getElementById('shift-diff-note-wrap');
-        if (noteWrap) noteWrap.classList.remove('hidden');
-        const diffEl = document.getElementById('shift-close-diff');
-        if (diffEl) diffEl.innerHTML = serverDiff > 0
-          ? `<span class="text-indigo-600">ยอดจากฐานข้อมูล: เงินเกิน ${fmt(serverDiff)} — กรุณาระบุสาเหตุ</span>`
-          : `<span class="text-rose-600">ยอดจากฐานข้อมูล: เงินขาด ${fmt(Math.abs(serverDiff))} — กรุณาระบุสาเหตุ</span>`;
-        window._shiftCloseSummary = { ...(window._shiftCloseSummary || sum), expectedCash: serverExpected };
-        throw new Error('ยอดเงินสดที่นับได้ไม่ตรงกับยอดคาดการณ์จาก Supabase กรุณาระบุสาเหตุ แล้วกดยืนยันปิดกะอีกครั้ง');
-      }
       const { data, error } = await c.rpc('close_shift', {
         p_shift_id: shiftUuid,
         p_actual_cash: roundAmt(actual),
@@ -6292,7 +6180,6 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
       s.closedBy = db.activeUser?.name || '-';
       s.summary = sum;
       s.diff = roundAmt(actual - Number(data.expected_cash ?? sum.expectedCash));
-      s.cloudReconciliation = reconciliation;
       s.diffNote = s.diff !== 0 ? diffNote : '';
       s.cloudCloseResult = data;
       db.currentShift = null;
@@ -6940,11 +6827,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
     if (!shiftId) return;
     const s = (db.shifts || []).find(x => x.id === shiftId) || (db.currentShift && db.currentShift.id === shiftId ? db.currentShift : null);
     if (!s) return;
-    if (s.endTime) throw new Error('กะนี้ปิดแล้วและไม่สามารถสร้างซ้ำผ่าน open_shift ได้');
-    const { error } = await c.rpc('open_shift', {
-      p_shift_id: toUUID(s.id), p_opening_cash: roundAmt(s.openingCash),
-      p_opened_at: new Date(s.startTime).toISOString()
-    });
+    const { error } = await c.from('shifts').upsert([window._shiftRow(s)], { onConflict: 'id' });
     if (error) throw error;
   }
   // ใช้จาก flow ปิดกะเท่านั้น: คืน UUID เดียวกับที่ upsert ไป Supabase
@@ -7069,8 +6952,6 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
     const { error } = await c.rpc('process_return', {
       p_bill_id: bill._serverBillId || toUUID(bill.id),
       p_items: (p.items || []).map(i => ({
-        product_id: i.product_id ? toUUID(i.product_id) : null,
-        item_name: i.item_name || null,
         variant_id: i.variant_id ? toUUID(i.variant_id) : null,
         fraction_id: i.fraction_id ? toUUID(i.fraction_id) : null,
         quantity: +i.quantity || 0,
@@ -7112,9 +6993,8 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
       if (se) throw se;
     }
     const items = (r.items || []).map(x => {
-      const v = (db.products[x.productId]?.variants || []).find(y => String(y.id) === String(x.variantId));
-      if (!v || !v.id) throw new Error('ไม่พบรุ่นสินค้าที่ระบุในใบรับเข้า: ' + (x.productName || x.productId));
-      return { product_id: toUUID(x.productId), variant_id: toUUID(v.id), quantity: +x.qty, unit_cost: +x.cost || 0 };
+      const v = db.products[x.productId]?.variants?.[0];
+      return { product_id: toUUID(x.productId), variant_id: v && v.id ? toUUID(v.id) : null, quantity: +x.qty, unit_cost: +x.cost || 0 };
     });
     const { data, error } = await c.rpc('receive_goods', {
       p_client_ref: r.id, p_supplier_id: toUUID(r.supplierId), p_doc_ref: r.docRef || null,
@@ -7197,54 +7077,6 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
   window.retryFailedSyncOps = function () {
     (db.syncQueue || []).forEach(o => { if (o.status === 'failed') { o.status = 'pending'; o.tries = 0; } });
     if (window.persist) window.persist();
-  };
-
-  // Round 13/14: display the server-calculated gross-profit report. Never derive COGS from current prices in the browser.
-  window.loadProfitReport = async function () {
-    const status = document.getElementById('profit-report-status');
-    const body = document.getElementById('profit-report-rows');
-    const summary = document.getElementById('profit-report-summary');
-    if (!status || !body || !summary) return;
-    const c = client();
-    if (!c) { status.textContent = 'ยังไม่ได้เชื่อมต่อ Supabase'; return; }
-    const fromValue = document.getElementById('profit-from')?.value || '';
-    const toValue = document.getElementById('profit-to')?.value || '';
-    if (fromValue && toValue && fromValue > toValue) { status.textContent = 'วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด'; return; }
-    const toNextDay = (dateText) => {
-      if (!dateText) return null;
-      const [y,m,d] = dateText.split('-').map(Number);
-      const next = new Date(Date.UTC(y, m - 1, d + 1));
-      return `${next.getUTCFullYear()}-${String(next.getUTCMonth()+1).padStart(2,'0')}-${String(next.getUTCDate()).padStart(2,'0')}T00:00:00+07:00`;
-    };
-    const p_from = fromValue ? `${fromValue}T00:00:00+07:00` : null;
-    const p_to = toNextDay(toValue);
-    status.textContent = 'กำลังอ่านรายงานจากฐานข้อมูล…';
-    body.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-slate-400">กำลังโหลด…</td></tr>';
-    try {
-      const { data, error } = await c.rpc('get_profit_report', { p_from, p_to });
-      if (error) throw error;
-      const rows = Array.isArray(data) ? data : [];
-      const sum = (key) => rows.reduce((acc, row) => acc + (Number(row[key]) || 0), 0);
-      const money = (value) => (Number(value) || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const tile = (label, value, extra='') => `<div class="rounded-xl bg-slate-50 border p-3"><div class="text-[11px] text-slate-500">${label}</div><div class="text-base font-black text-slate-800">฿${money(value)}</div>${extra}</div>`;
-      const missing = rows.filter(row => row.cost_missing).length;
-      summary.innerHTML = tile('ยอดขายสุทธิ', sum('net_revenue')) + tile('ต้นทุนสุทธิ', sum('net_cost')) + tile('กำไรขั้นต้น', sum('gross_profit')) + tile('บิลที่ต้องตรวจต้นทุน', missing, `<div class="text-[10px] text-amber-700">จาก ${rows.length} บิล</div>`);
-      if (!rows.length) { body.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-slate-400">ไม่พบข้อมูลในช่วงวันที่นี้</td></tr>'; }
-      else {
-        body.innerHTML = rows.map(row => {
-          const dt = row.sold_at ? new Date(row.sold_at).toLocaleString('th-TH') : '-';
-          const bill = String(row.bill_number ?? '');
-          const method = String(row.payment_method ?? '-');
-          const costFlag = row.cost_missing ? '<span class="text-amber-700 font-bold">ตรวจสอบ</span>' : '<span class="text-emerald-700">ครบ</span>';
-          return `<tr class="border-t"><td class="p-2 whitespace-nowrap">${dt}</td><td class="p-2">${bill.replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}</td><td class="p-2">${method.replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}</td><td class="p-2 text-right">฿${money(row.net_revenue)}</td><td class="p-2 text-right">฿${money(row.net_cost)}</td><td class="p-2 text-right font-bold">฿${money(row.gross_profit)}</td><td class="p-2 text-center">${costFlag}</td></tr>`;
-        }).join('');
-      }
-      status.textContent = `โหลดสำเร็จ ${rows.length} บิล · ยอดและต้นทุนมาจาก RPC ของ Supabase`;
-    } catch (err) {
-      body.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-rose-600">โหลดรายงานไม่สำเร็จ</td></tr>';
-      summary.innerHTML = '';
-      status.textContent = 'โหลดรายงานไม่สำเร็จ: ' + errMsg(err) + ' — ตรวจว่าติดตั้ง SQL รุ่นที่มี get_profit_report แล้ว และบัญชีมี Supabase Auth';
-    }
   };
 
   window.checkServerSchema = async function () {
@@ -7379,7 +7211,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
 <div id="sp-observe-panel" role="dialog" aria-modal="true" aria-label="ประวัติและตรวจสอบระบบ">
  <div class="sp-head"><strong>🧭 สถานะระบบ • ประวัติกิจกรรม • ตรวจรูปสินค้า</strong><button id="sp-observe-close">ปิด ✕</button></div>
  <div class="sp-body">
-  <div class="flex flex-wrap gap-2 mb-3"><button id="sp-observe-refresh">↻ ตรวจใหม่</button><button id="sp-observe-storage">🖼️ ตรวจรูปใน Supabase Storage</button><button type="button" onclick="window.openImageManager()">🖼️ จัดการ/จับคู่รูปสินค้า</button><button id="sp-observe-export">⬇ ส่งออก Log</button><button id="sp-observe-clear">ล้าง Log ในเครื่อง</button></div>
+  <div class="flex flex-wrap gap-2 mb-3"><button id="sp-observe-refresh">↻ ตรวจใหม่</button><button id="sp-observe-storage">🖼️ ตรวจรูปใน Supabase Storage</button><button id="sp-observe-export">⬇ ส่งออก Log</button><button id="sp-observe-clear">ล้าง Log ในเครื่อง</button></div>
   <div id="sp-observe-status" class="mb-3 rounded-xl border p-3 bg-slate-50">กำลังตรวจสถานะ…</div>
   <div id="sp-observe-stats" class="sp-grid mb-4"></div>
   <div id="sp-observe-advice" class="rounded-xl border p-3 mb-4 bg-amber-50"></div>
@@ -7407,9 +7239,9 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
        try {
         const {data:{session},error:sessionError}=await client.auth.getSession();
         if(sessionError||!session?.user) continue;
-        // Actor is derived by the server from auth.uid(); never trust the browser's PIN-selected user.
-        const details={message:String(ev.message||'').slice(0,2000),detail:String(ev.detail||'').slice(0,2000),source:'Smart POS Activity Log',email:session.user.email||null,device_id:String(window.getDeviceId?.()||'browser').slice(0,160),client_time:ev.time};
-        const {error}=await client.rpc('record_audit_event',{p_action:String(ev.type||'INFO').slice(0,80),p_entity_type:'application',p_entity_id:null,p_details:details});
+        const u=window.db?.activeUser||{};
+        const row={id:crypto.randomUUID(),occurred_at:ev.time,actor_app_user_id:null,actor_name:String(u.name||session.user.email||'ผู้ใช้ที่ยืนยันตัวตนแล้ว').slice(0,160),actor_role:String(u.role||'UNKNOWN').slice(0,40),action:String(ev.type||'INFO').slice(0,80),entity:'application',entity_id:null,detail:(String(ev.message||'')+' '+String(ev.detail||'')).trim().slice(0,4000),meta:{source:'Smart POS Activity Log',email:session.user.email||null},device_id:String(window.getDeviceId?.()||'browser').slice(0,160)};
+        const {error}=await client.from('audit_logs').insert(row);
         if(error && !window.__spAuditWarned){window.__spAuditWarned=true;const a=read();a.unshift({time:new Date().toISOString(),type:'WARN',message:'ส่ง Audit Log ไป Supabase ไม่สำเร็จ',detail:String(error.message||error).slice(0,500)});try{localStorage.setItem(KEY,JSON.stringify(a.slice(0,MAX)))}catch(_){}}
        } catch(err) { if(!window.__spAuditWarned){window.__spAuditWarned=true;const a=read();a.unshift({time:new Date().toISOString(),type:'WARN',message:'ส่ง Audit Log ไป Supabase ไม่สำเร็จ',detail:String(err?.message||err).slice(0,500)});try{localStorage.setItem(KEY,JSON.stringify(a.slice(0,MAX)))}catch(_){}} }
       }
@@ -7464,391 +7296,6 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
 })();
 </script>
 
-<!-- ===== Image Manager: ตรวจสอบ/จับคู่/จัดการรูปสินค้าใน Storage (product-images) ===== -->
-<style id="imgmgr-style">
-#imgmgr{position:fixed;inset:0;z-index:9950;background:#f8fafc;color:#0f172a;display:none;flex-direction:column;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
-#imgmgr.open{display:flex}
-#imgmgr .im-head{background:#0f172a;color:#fff;padding:12px 14px;padding-top:calc(12px + env(safe-area-inset-top,0px));display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px}
-#imgmgr .im-head button{background:#334155;color:#fff;border:0;border-radius:10px;padding:8px 12px;font-weight:700;font-size:12px}
-#imgmgr .im-body{flex:1;overflow:auto;padding:12px;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));-webkit-overflow-scrolling:touch}
-#imgmgr button{cursor:pointer;font-family:inherit}
-#imgmgr .im-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
-#imgmgr .im-btn{border:0;border-radius:12px;padding:11px 14px;font-weight:800;font-size:13px;background:#e2e8f0;color:#0f172a;min-height:44px}
-#imgmgr .im-btn.pri{background:#4f46e5;color:#fff}
-#imgmgr .im-btn.ok{background:#059669;color:#fff}
-#imgmgr .im-btn.bad{background:#e11d48;color:#fff}
-#imgmgr .im-btn:disabled{opacity:.5}
-#imgmgr .im-status{border:1px solid #cbd5e1;background:#fff;border-radius:12px;padding:10px 12px;font-size:12px;margin-bottom:10px;line-height:1.5}
-#imgmgr .im-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
-#imgmgr .im-stat{border:1px solid #e2e8f0;background:#fff;border-radius:12px;padding:10px}
-#imgmgr .im-stat b{display:block;font-size:22px;font-weight:900;line-height:1.1}
-#imgmgr .im-stat span{font-size:11px;color:#64748b}
-#imgmgr .im-bar{height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin:6px 0 4px}
-#imgmgr .im-bar i{display:block;height:100%;background:#059669}
-#imgmgr .im-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;-webkit-overflow-scrolling:touch}
-#imgmgr .im-tab{flex:0 0 auto;border:1px solid #cbd5e1;background:#fff;border-radius:99px;padding:8px 12px;font-size:12px;font-weight:800;white-space:nowrap;min-height:38px}
-#imgmgr .im-tab.on{background:#0f172a;color:#fff;border-color:#0f172a}
-#imgmgr .im-tab em{font-style:normal;opacity:.7;margin-left:4px}
-#imgmgr .im-row{display:flex;gap:10px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:10px;margin-bottom:8px}
-#imgmgr .im-th{width:64px;height:64px;flex:0 0 64px;border-radius:10px;background:#f1f5f9;border:1px solid #e2e8f0;object-fit:cover;display:flex;align-items:center;justify-content:center;font-size:24px;overflow:hidden}
-#imgmgr .im-th img{width:100%;height:100%;object-fit:cover}
-#imgmgr .im-main{flex:1;min-width:0}
-#imgmgr .im-t{font-weight:800;font-size:13px;word-break:break-word;line-height:1.3}
-#imgmgr .im-s{font-size:11px;color:#64748b;margin-top:2px;word-break:break-all}
-#imgmgr .im-chip{display:inline-block;border-radius:99px;padding:2px 8px;font-size:10px;font-weight:800;margin-top:4px}
-#imgmgr .c-ok{background:#d1fae5;color:#065f46}#imgmgr .c-link{background:#e0e7ff;color:#3730a3}
-#imgmgr .c-warn{background:#fef3c7;color:#92400e}#imgmgr .c-bad{background:#ffe4e6;color:#9f1239}#imgmgr .c-gray{background:#e2e8f0;color:#334155}
-#imgmgr .im-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-#imgmgr .im-acts button{border:0;border-radius:10px;padding:9px 11px;font-size:12px;font-weight:800;background:#e2e8f0;color:#0f172a;min-height:40px}
-#imgmgr .im-acts .pri{background:#4f46e5;color:#fff}#imgmgr .im-acts .ok{background:#059669;color:#fff}#imgmgr .im-acts .bad{background:#ffe4e6;color:#be123c}
-#imgmgr .im-empty{text-align:center;color:#64748b;font-size:12px;padding:24px 8px}
-#im-picker{position:fixed;inset:0;z-index:9960;background:rgba(15,23,42,.6);display:none;align-items:flex-end;justify-content:center}
-#im-picker.open{display:flex}
-#im-picker .box{background:#fff;width:100%;max-width:560px;max-height:85vh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px)}
-#im-picker .ph{padding:12px 14px;font-weight:900;font-size:14px;display:flex;justify-content:space-between;align-items:center}
-#im-picker input{margin:0 14px 8px;border:1px solid #cbd5e1;border-radius:12px;padding:11px 12px;font-size:14px}
-#im-picker .pl{overflow:auto;padding:0 10px 12px;-webkit-overflow-scrolling:touch}
-#im-picker .pi{display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:0;background:#f8fafc;border-radius:12px;padding:8px;margin-bottom:6px;min-height:52px;font-family:inherit}
-#im-picker .pi .im-th{width:44px;height:44px;flex-basis:44px}
-@media(min-width:700px){#imgmgr .im-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-</style>
-
-<div id="imgmgr" role="dialog" aria-modal="true" aria-label="จัดการรูปสินค้า">
-  <div class="im-head"><strong>🖼️ จัดการรูปสินค้า (Storage)</strong><button id="im-close" type="button">ปิด ✕</button></div>
-  <div class="im-body">
-    <div class="im-actions">
-      <button id="im-scan" class="im-btn pri" type="button">🔍 ตรวจสอบ</button>
-      <button id="im-bulk" class="im-btn" type="button">⬆ อัปโหลดหลายรูป (ชื่อไฟล์ = ชื่อสินค้า)</button>
-      <button id="im-csv" class="im-btn" type="button">⬇ รายงาน CSV</button>
-    </div>
-    <input id="im-bulk-file" type="file" accept="image/*" multiple hidden>
-    <input id="im-one-file" type="file" accept="image/*" hidden>
-    <div id="im-status" class="im-status">กด “ตรวจสอบ” เพื่อนับรูปใน Storage และจับคู่กับสินค้า (ชื่อไฟล์ตรงกับชื่อสินค้า หรือรหัสสินค้า)</div>
-    <div id="im-summary"></div>
-    <div id="im-tabs" class="im-tabs"></div>
-    <div id="im-bulkbar" class="im-actions"></div>
-    <div id="im-list"></div>
-    <div id="im-more"></div>
-  </div>
-</div>
-<div id="im-picker"><div class="box"><div class="ph"><span id="im-picker-title"></span><button id="im-picker-x" class="im-btn" type="button">ปิด</button></div><input id="im-picker-q" type="search" placeholder="พิมพ์ค้นหา…" autocomplete="off"><div id="im-picker-list" class="pl"></div></div></div>
-
-<script>
-(function(){
-'use strict';
-const BUCKET='product-images', PAGE_SIZE=40;
-const $=id=>document.getElementById(id);
-const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const DB=()=>{try{return (typeof db!=='undefined'&&db)||window.db||{};}catch(e){return window.db||{};}};
-const client=()=>window.getSupabaseClient?window.getSupabaseClient():null;
-const notify=m=>{try{window.showToast?window.showToast(m):alert(m);}catch(e){}};
-const alertBox=(t,d,err)=>{try{window.showAlert?window.showAlert(t,d,!!err):alert(t+'\n'+d);}catch(e){alert(t+'\n'+d);}};
-const canEdit=()=>{try{return !!(window.canDo&&window.canDo('PRODUCT_EDIT'));}catch(e){return false;}};
-
-let S=null;            // {files:[], rows:[], prodRows:[], counts:{}}
-let filter='match', page=1, busy=false, curRows=[], pendingProd=null;
-const stale=new Set();
-
-/* ---------- ตัวช่วยชื่อ/ลิงก์ ---------- */
-const normName=s=>String(s||'').normalize('NFC').toLowerCase().replace(/[\s_\-.,()\[\]{}\/\\+'"“”‘’:;#]+/g,'');
-const fileBase=n=>String(n||'').replace(/\.(jpe?g|png|webp|gif|jfif|heic|heif|bmp)$/i,'');
-const imgUrlOf=p=>p.imageUrl||(/^https?:/i.test(p.image||'')?p.image:'')||'';
-function pathOf(u){ if(!u) return ''; const m=String(u).match(/\/product-images\/([^?#]+)/); if(!m) return ''; try{return decodeURIComponent(m[1]);}catch(e){return m[1];} }
-const pub=path=>client().storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
-const kb=n=>n?(n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB'):'';
-const say=h=>{$('im-status').innerHTML=h;};
-
-/* ---------- อ่านรายการไฟล์ทั้งหมด (รวมโฟลเดอร์ย่อย, แบ่งหน้า) ---------- */
-async function listAll(c){
-  const out=[];
-  async function walk(prefix,depth){
-    let offset=0;
-    for(;;){
-      const {data,error}=await c.storage.from(BUCKET).list(prefix,{limit:1000,offset,sortBy:{column:'name',order:'asc'}});
-      if(error) throw error;
-      const rows=data||[];
-      for(const f of rows){
-        if(!f||!f.name) continue;
-        const path=prefix?prefix+'/'+f.name:f.name;
-        if(f.id){ if(!f.name.startsWith('.')) out.push({path,name:f.name,size:(f.metadata&&f.metadata.size)||0,type:(f.metadata&&f.metadata.mimetype)||''}); }
-        else if(depth<4) await walk(path,depth+1);
-      }
-      say('กำลังอ่านรายการไฟล์… พบแล้ว '+out.length.toLocaleString()+' ไฟล์');
-      if(rows.length<1000) break;
-      offset+=1000; if(offset>50000) break;
-    }
-  }
-  await walk('',0);
-  return out;
-}
-
-/* ---------- วิเคราะห์การจับคู่ ---------- */
-function analyze(){
-  const prods=Object.values(DB().products||{}), byPath=new Map(S.files.map(f=>[f.path,f]));
-  const linked=new Map(), noImg=[], broken=[], localOnly=[]; let external=0;
-  for(const p of prods){
-    const u=imgUrlOf(p);
-    if(!u){noImg.push(p);continue;}
-    const path=pathOf(u);
-    if(path){
-      if(byPath.has(path)){ if(!linked.has(path)) linked.set(path,[]); linked.get(path).push(p); }
-      else broken.push({p,reason:'ไฟล์ที่ลิงก์ไว้ไม่มีอยู่บน Storage แล้ว'});
-    } else if(/^blob:/i.test(u)) broken.push({p,reason:'ลิงก์ชั่วคราว (blob:) ใช้ไม่ได้หลังรีโหลด'});
-    else if(/^data:/i.test(u)) localOnly.push(p);
-    else external++;
-  }
-  const nameIdx=new Map(), codeIdx=new Map();
-  const add=(m,k,p)=>{ if(!k) return; if(!m.has(k)) m.set(k,[]); m.get(k).push(p); };
-  for(const p of prods){ add(nameIdx,normName(p.name),p); const ck=normName(p.code); if(ck.length>=3) add(codeIdx,ck,p); }
-  const need=new Set([...noImg,...broken.map(x=>x.p),...localOnly]);
-  const claimed=new Map(), rows=[];
-  for(const f of S.files){
-    if(linked.has(f.path)){ const ps=linked.get(f.path); rows.push({kind:'file',status:ps.length>1?'shared':'linked',file:f,products:ps}); continue; }
-    const key=normName(fileBase(f.name));
-    let cands=nameIdx.get(key)||[], by='ชื่อสินค้า';
-    if(!cands.length){ cands=codeIdx.get(key)||[]; by='รหัสสินค้า'; }
-    if(cands.length===1){
-      const q=cands[0];
-      if(need.has(q)&&!claimed.has(q)){ claimed.set(q,f); rows.push({kind:'file',status:'match',file:f,products:[q],by}); }
-      else rows.push({kind:'file',status:'conflict',file:f,products:[q],by,why:claimed.has(q)?'มีหลายไฟล์ที่ชื่อตรงกับสินค้านี้':'สินค้านี้มีรูปอื่นอยู่แล้ว'});
-    } else if(cands.length>1) rows.push({kind:'file',status:'ambiguous',file:f,products:cands});
-    else rows.push({kind:'file',status:'orphan',file:f,products:[]});
-  }
-  const prodRows=[];
-  for(const p of noImg) if(!claimed.has(p)) prodRows.push({kind:'prod',status:'noimg',p});
-  for(const x of broken) if(!claimed.has(x.p)) prodRows.push({kind:'prod',status:'broken',p:x.p,reason:x.reason});
-  for(const p of localOnly) if(!claimed.has(p)) prodRows.push({kind:'prod',status:'local',p});
-  const cnt=k=>rows.filter(r=>r.status===k).length;
-  S.rows=rows; S.prodRows=prodRows; S.prods=prods;
-  S.counts={files:S.files.length,products:prods.length,linkedFiles:cnt('linked')+cnt('shared'),match:cnt('match'),orphan:cnt('orphan')+cnt('ambiguous'),
-    conflict:cnt('conflict'),shared:cnt('shared'),noimg:prodRows.filter(r=>r.status==='noimg').length,broken:prodRows.filter(r=>r.status==='broken').length,
-    local:prodRows.filter(r=>r.status==='local').length,external,prodsOk:prods.length-need.size+0,orphanOnly:cnt('orphan')};
-}
-
-/* ---------- วาดหน้าจอ ---------- */
-const TABS=[['match','🔗 ชื่อตรง รอผูก'],['orphan','❓ ไม่มีสินค้า'],['noimg','📭 สินค้าไม่มีรูป'],['broken','⚠️ ลิงก์เสีย'],['local','💾 รูปอยู่ในเครื่อง'],['dup','👯 ซ้ำ/ชนกัน'],['linked','✅ ปกติ']];
-function rowsFor(k){
-  if(k==='match') return S.rows.filter(r=>r.status==='match');
-  if(k==='orphan') return S.rows.filter(r=>r.status==='orphan'||r.status==='ambiguous');
-  if(k==='dup') return S.rows.filter(r=>r.status==='conflict'||r.status==='shared');
-  if(k==='linked') return S.rows.filter(r=>r.status==='linked');
-  return S.prodRows.filter(r=>r.status===k);
-}
-function render(){
-  if(!S) return;
-  const c=S.counts, ok=Math.max(0,c.products-c.noimg-c.broken-c.local-S.rows.filter(r=>r.status==='match').length);
-  const pct=c.products?Math.round(ok*100/c.products):0;
-  $('im-summary').innerHTML=
-   '<div class="im-grid">'+
-   '<div class="im-stat"><b>'+c.files.toLocaleString()+'</b><span>ไฟล์ใน Storage</span></div>'+
-   '<div class="im-stat"><b>'+(c.linkedFiles+c.match).toLocaleString()+'</b><span>รูปที่จับคู่สินค้าได้ ('+c.linkedFiles.toLocaleString()+' ผูกแล้ว + '+c.match.toLocaleString()+' รอผูก)</span></div>'+
-   '<div class="im-stat"><b>'+c.orphan.toLocaleString()+'</b><span>รูปที่ไม่มีสินค้า (กำพร้า)</span></div>'+
-   '<div class="im-stat"><b>'+(c.noimg+c.broken+c.local).toLocaleString()+'</b><span>สินค้าที่ยังไม่มีรูปใช้งานได้</span></div></div>'+
-   '<div class="im-stat" style="margin-bottom:10px"><span>เป้าหมาย 1 รูป / 1 สินค้า: สินค้ามีรูปพร้อมใช้ '+ok.toLocaleString()+' จาก '+c.products.toLocaleString()+' ('+pct+'%)'+(c.external?' • ใช้ลิงก์ภายนอก '+c.external:'')+'</span><div class="im-bar"><i style="width:'+pct+'%"></i></div></div>';
-  $('im-tabs').innerHTML=TABS.map(t=>{const n=rowsFor(t[0]).length;return '<button class="im-tab'+(filter===t[0]?' on':'')+'" data-tab="'+t[0]+'" type="button">'+t[1]+'<em>'+n.toLocaleString()+'</em></button>';}).join('');
-  renderBulkBar(); renderList();
-}
-function renderBulkBar(){
-  const n=rowsFor(filter).length; let h='';
-  if(!canEdit()){ $('im-bulkbar').innerHTML='<div class="im-s">บัญชีนี้ดูได้อย่างเดียว (ไม่มีสิทธิ์แก้ไขสินค้า)</div>'; return; }
-  if(filter==='match'&&n) h='<button class="im-btn ok" data-bulk="link" type="button">🔗 ผูกอัตโนมัติทั้งหมด ('+n.toLocaleString()+')</button>';
-  if(filter==='orphan'&&S.counts.orphanOnly) h='<button class="im-btn bad" data-bulk="delorphan" type="button">🗑 ลบไฟล์ที่ไม่มีสินค้าทั้งหมด ('+S.counts.orphanOnly.toLocaleString()+')</button>';
-  if(filter==='broken'&&n) h='<button class="im-btn bad" data-bulk="clearbroken" type="button">ล้างลิงก์เสียทั้งหมด ('+n.toLocaleString()+')</button>';
-  if(filter==='local'&&n) h='<button class="im-btn ok" data-bulk="uploadlocal" type="button">⬆ อัปโหลดรูปในเครื่องขึ้น Storage ทั้งหมด ('+n.toLocaleString()+')</button>';
-  $('im-bulkbar').innerHTML=h;
-}
-const chip=(cls,t)=>'<span class="im-chip '+cls+'">'+t+'</span>';
-function thumb(url){ return '<div class="im-th">'+(url?'<img loading="lazy" decoding="async" alt="" src="'+esc(url)+'" onerror="this.replaceWith(document.createTextNode(\'🚫\'))">':'📦')+'</div>'; }
-function suggestFor(row){
-  if(row._sg!==undefined) return row._sg;
-  const k=normName(fileBase(row.file.name)); let best=null;
-  if(k.length>=4) for(const p of S.prods){ const n=normName(p.name); if(n.length>=4&&(k.includes(n)||n.includes(k))){ if(!best||Math.abs(n.length-k.length)<Math.abs(normName(best.name).length-k.length)) best=p; } }
-  return (row._sg=best);
-}
-function rowHtml(r,i){
-  const edit=canEdit(), a=[];
-  if(r.kind==='file'){
-    const f=r.file, url=pub(f.path), p0=r.products[0];
-    let title=esc(f.path), sub='', ch='';
-    if(r.status==='linked'){ title=esc(p0.name); sub='ไฟล์: '+esc(f.path)+' • '+kb(f.size); ch=chip('c-ok','✅ ผูกกับสินค้าแล้ว'); if(edit){a.push(['upload','📷 เปลี่ยนรูป','']);a.push(['unlinkdel','🗑 ลบรูป','bad']);} }
-    else if(r.status==='shared'){ title=esc(f.path); sub='ใช้ร่วมกัน '+r.products.length+' สินค้า: '+esc(r.products.slice(0,3).map(p=>p.name).join(', '))+(r.products.length>3?' …':''); ch=chip('c-warn','👯 รูปเดียวใช้หลายสินค้า'); if(edit) r.products.slice(0,3).forEach((p,j)=>a.push(['uploadshared','📷 รูปใหม่ให้ «'+esc(String(p.name).slice(0,14))+'»','',j])); }
-    else if(r.status==='match'){ title=esc(f.path); sub='ตรงกับ'+esc(r.by)+': '+esc(p0.name)+' • '+kb(f.size); ch=chip('c-link','🔗 ชื่อตรง พร้อมผูก'); if(edit){a.push(['link','🔗 ผูกกับสินค้านี้','ok']);a.push(['pickprod','เลือกสินค้าอื่น','']);a.push(['delfile','🗑','bad']);} }
-    else if(r.status==='conflict'){ title=esc(f.path); sub='ชื่อตรงกับ «'+esc(p0.name)+'» แต่ '+esc(r.why)+' • '+kb(f.size); ch=chip('c-warn','👯 ซ้ำ/ชนกัน'); if(edit){a.push(['useinstead','ใช้รูปนี้แทน','pri']);a.push(['delfile','🗑 ลบไฟล์นี้','bad']);} }
-    else if(r.status==='ambiguous'){ title=esc(f.path); sub='ชื่อตรงกับสินค้า '+r.products.length+' รายการ: '+esc(r.products.slice(0,3).map(p=>p.name).join(', ')); ch=chip('c-warn','❔ ชื่อกำกวม ต้องเลือกเอง'); if(edit){a.push(['pickprod','เลือกสินค้า','pri']);a.push(['delfile','🗑','bad']);} }
-    else { title=esc(f.path); sub=kb(f.size); ch=chip('c-gray','❓ ไม่พบสินค้าชื่อนี้'); const sg=suggestFor(r); if(sg&&edit) a.push(['linksg','🔗 คล้าย «'+esc(String(sg.name).slice(0,18))+'»','ok']); if(edit){a.push(['pickprod','เลือกสินค้า','pri']);a.push(['delfile','🗑 ลบ','bad']);} }
-    return '<div class="im-row" data-i="'+i+'">'+thumb(url)+'<div class="im-main"><div class="im-t">'+title+'</div><div class="im-s">'+sub+'</div>'+ch+'<div class="im-acts">'+a.map(x=>'<button type="button" class="'+x[2]+'" data-act="'+x[0]+'"'+(x[3]!==undefined?' data-j="'+x[3]+'"':'')+'>'+x[1]+'</button>').join('')+'</div></div></div>';
-  }
-  const p=r.p; let ch='',sub='รหัส: '+esc(p.code||'-');
-  if(r.status==='noimg'){ ch=chip('c-gray','📭 ยังไม่มีรูป'); }
-  if(r.status==='broken'){ ch=chip('c-bad','⚠️ '+esc(r.reason)); }
-  if(r.status==='local'){ ch=chip('c-warn','💾 รูปอยู่ในเครื่องนี้เท่านั้น ยังไม่ขึ้น Storage'); }
-  if(edit){ a.push(['upload','📷 ถ่าย/เลือกรูป','pri']); a.push(['pickfile','เลือกจากไฟล์ที่ไม่ได้ใช้','']); if(r.status==='broken') a.push(['clearlink','ล้างลิงก์','bad']); if(r.status==='local') a.push(['uploadlocal','⬆ อัปโหลดขึ้น Storage','ok']); }
-  const cur=imgUrlOf(p);
-  return '<div class="im-row" data-i="'+i+'">'+thumb(r.status==='local'?cur:'')+'<div class="im-main"><div class="im-t">'+esc(p.name)+'</div><div class="im-s">'+sub+'</div>'+ch+'<div class="im-acts">'+a.map(x=>'<button type="button" class="'+x[2]+'" data-act="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div></div>';
-}
-function renderList(){
-  curRows=rowsFor(filter);
-  const shown=curRows.slice(0,page*PAGE_SIZE);
-  $('im-list').innerHTML=shown.length?shown.map((r,i)=>rowHtml(r,i)).join(''):'<div class="im-empty">ไม่มีรายการในหมวดนี้ 🎉</div>';
-  $('im-more').innerHTML=curRows.length>shown.length?'<button class="im-btn" id="im-more-btn" type="button" style="width:100%">แสดงเพิ่ม ('+(curRows.length-shown.length).toLocaleString()+' รายการที่เหลือ)</button>':'';
-}
-
-/* ---------- บันทึก/ซิงก์ ---------- */
-let syncT=null;
-function commit(){
-  try{window.persist&&window.persist();}catch(e){console.warn(e);}
-  clearTimeout(syncT);
-  syncT=setTimeout(()=>{ try{ const r=window.syncProductsToSupabase&&window.syncProductsToSupabase(true); Promise.resolve(r).then(()=>window.flushSyncQueue&&window.flushSyncQueue()).catch(()=>{}); }catch(e){}
-    try{window.renderStockTable&&window.renderStockTable();window.renderSaleHome&&window.renderSaleHome();}catch(e){} },1500);
-}
-async function removeFiles(paths){
-  const c=client(), gone=[]; if(!c||!paths.length) return gone;
-  for(let i=0;i<paths.length;i+=100){
-    const chunk=paths.slice(i,i+100);
-    const {error}=await c.storage.from(BUCKET).remove(chunk);
-    if(error) throw error; gone.push(...chunk);
-  }
-  const g=new Set(gone); S.files=S.files.filter(f=>!g.has(f.path));
-  return gone;
-}
-async function dropStale(){
-  if(!stale.size) return 0;
-  const used=new Set(Object.values(DB().products||{}).map(p=>pathOf(imgUrlOf(p))).filter(Boolean));
-  const del=[...stale].filter(p=>!used.has(p)&&S.files.some(f=>f.path===p)); stale.clear();
-  try{ return (await removeFiles(del)).length; }catch(e){ console.warn('ลบไฟล์เก่าไม่สำเร็จ',e); return 0; }
-}
-function setLink(p,file){ const old=pathOf(imgUrlOf(p)); p.imageUrl=pub(file.path); if(old&&old!==file.path) stale.add(old); }
-async function finish(msg){ commit(); const d=await dropStale(); analyze(); render(); if(msg) notify(msg+(d?' (ลบไฟล์รูปเก่าที่ไม่ใช้แล้ว '+d+' ไฟล์)':'')); }
-async function guarded(fn){
-  if(busy) return notify('กำลังทำงานอยู่ รอสักครู่'); if(!canEdit()) return alertBox('ไม่มีสิทธิ์','บัญชีนี้ไม่มีสิทธิ์แก้ไขสินค้า',true);
-  busy=true; try{ await fn(); }catch(e){ console.error(e); alertBox('ทำรายการไม่สำเร็จ',String((e&&e.message)||e),true); } finally{ busy=false; }
-}
-
-/* ---------- อัปโหลด ---------- */
-async function compress(file,max){
-  max=max||900;
-  try{
-    const bmp=await createImageBitmap(file), k=Math.min(1,max/Math.max(bmp.width,bmp.height));
-    const cv=document.createElement('canvas'); cv.width=Math.max(1,Math.round(bmp.width*k)); cv.height=Math.max(1,Math.round(bmp.height*k));
-    const x=cv.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,cv.width,cv.height); x.drawImage(bmp,0,0,cv.width,cv.height);
-    return await new Promise((res,rej)=>cv.toBlob(b=>b?res(b):rej(new Error('แปลงรูปไม่สำเร็จ')),'image/jpeg',0.82));
-  }catch(e){
-    if(file.size<=10*1024*1024&&/^image\/(jpeg|png|webp|gif)$/.test(file.type)) return file;
-    throw new Error('อ่านไฟล์รูปไม่ได้ (รองรับ JPG/PNG/WEBP/GIF)');
-  }
-}
-async function uploadFor(p,fileOrBlob){
-  const c=client(); if(!c) throw new Error('ยังไม่ได้เชื่อมต่อ Supabase');
-  const blob=fileOrBlob.__done?fileOrBlob:await compress(fileOrBlob);
-  const ext=blob.type==='image/png'?'png':blob.type==='image/webp'?'webp':blob.type==='image/gif'?'gif':'jpg';
-  const path='product-'+p.id+'-'+Date.now()+'.'+ext;
-  const {error}=await c.storage.from(BUCKET).upload(path,blob,{contentType:blob.type||'image/jpeg',upsert:true});
-  if(error) throw error;
-  const f={path,name:path,size:blob.size,type:blob.type}; S.files.push(f); setLink(p,f); return f;
-}
-
-/* ---------- ตัวเลือก (picker) ---------- */
-let pickerItems=[], pickerCb=null;
-function openPicker(title,items,cb){ pickerItems=items; pickerCb=cb; $('im-picker-title').textContent=title; $('im-picker-q').value=''; drawPicker(''); $('im-picker').classList.add('open'); setTimeout(()=>{try{$('im-picker-q').focus();}catch(e){}},50); }
-function drawPicker(q){
-  const k=normName(q); const hit=(k?pickerItems.filter(it=>normName(it.label+' '+(it.sub||'')).includes(k)):pickerItems).slice(0,40);
-  $('im-picker-list').innerHTML=hit.length?hit.map(it=>'<button class="pi" type="button" data-pid="'+esc(it.id)+'">'+thumb(it.thumb)+'<span style="flex:1;min-width:0"><b style="font-size:13px;word-break:break-word">'+esc(it.label)+'</b><br><span class="im-s">'+esc(it.sub||'')+'</span></span></button>').join(''):'<div class="im-empty">ไม่พบรายการ</div>';
-}
-function closePicker(){ $('im-picker').classList.remove('open'); pickerCb=null; }
-
-/* ---------- ปุ่มต่างๆ ---------- */
-async function scan(){
-  const c=client(); if(!c) return alertBox('ยังไม่ได้เชื่อมต่อ','ต้องตั้งค่า/ล็อกอิน Supabase ก่อนถึงจะตรวจ Storage ได้',true);
-  if(busy) return; busy=true; $('im-scan').disabled=true;
-  try{
-    say('กำลังเริ่มตรวจสอบ…'); S={files:[]}; S.files=await listAll(c); analyze();
-    const n=S.counts; say('<b>ตรวจเสร็จ</b> พบ '+n.files.toLocaleString()+' ไฟล์ • สินค้า '+n.products.toLocaleString()+' รายการ<br><span style="color:#64748b">ตรวจจากข้อมูลสินค้าในเครื่องนี้ ควรซิงก์ให้เสร็จก่อนลบไฟล์</span>');
-    const first=['match','orphan','noimg','broken','local','dup','linked'].find(k=>rowsFor(k).length)||'linked'; filter=first; page=1; render();
-  }catch(e){ console.error(e); say('<span style="color:#be123c">ตรวจไม่สำเร็จ: '+esc((e&&e.message)||e)+'</span><br>ตรวจชื่อ bucket, การล็อกอิน และสิทธิ์ Storage (ต้องเป็นบัญชีเจ้าของร้าน)'); }
-  finally{ busy=false; $('im-scan').disabled=false; }
-}
-function rowByEl(el){ const r=el.closest('[data-i]'); return r?curRows[+r.dataset.i]:null; }
-async function onAct(act,row,j){
-  const p0=row.products?row.products[0]:row.p;
-  if(act==='link') return guarded(async()=>{ setLink(p0,row.file); await finish('ผูกรูปกับ «'+p0.name+'» แล้ว'); });
-  if(act==='linksg') return guarded(async()=>{ const sg=suggestFor(row); if(!sg) return; if(!confirm('ผูกไฟล์ "'+row.file.name+'" กับสินค้า "'+sg.name+'" ?')) return; setLink(sg,row.file); await finish('ผูกรูปกับ «'+sg.name+'» แล้ว'); });
-  if(act==='useinstead') return guarded(async()=>{ if(!confirm('แทนที่รูปเดิมของ "'+p0.name+'" ด้วยไฟล์นี้? (ไฟล์เดิมจะถูกลบถ้าไม่มีสินค้าอื่นใช้)')) return; setLink(p0,row.file); await finish('แทนที่รูปของ «'+p0.name+'» แล้ว'); });
-  if(act==='pickprod') return openPicker('เลือกสินค้าที่จะใช้รูปนี้',S.prods.map(p=>({id:String(p.id),label:p.name,sub:(p.code||'')+(imgUrlOf(p)?' • มีรูปอยู่แล้ว':' • ยังไม่มีรูป'),thumb:imgUrlOf(p)})),pid=>{
-    const p=S.prods.find(x=>String(x.id)===pid); if(!p) return;
-    guarded(async()=>{ if(imgUrlOf(p)&&!confirm('สินค้า "'+p.name+'" มีรูปอยู่แล้ว ต้องการแทนที่?')) return; setLink(p,row.file); await finish('ผูกรูปกับ «'+p.name+'» แล้ว'); }); });
-  if(act==='pickfile'){ const unused=S.rows.filter(r=>r.status==='orphan'||r.status==='ambiguous'||r.status==='match'||r.status==='conflict');
-    return openPicker('เลือกไฟล์รูปสำหรับ «'+p0.name+'»',unused.map(r=>({id:r.file.path,label:r.file.path,sub:kb(r.file.size),thumb:pub(r.file.path)})),path=>{
-      const f=S.files.find(x=>x.path===path); if(!f) return; guarded(async()=>{ setLink(p0,f); await finish('ผูกรูปกับ «'+p0.name+'» แล้ว'); }); }); }
-  if(act==='upload'||act==='uploadshared'){ pendingProd=act==='uploadshared'?row.products[j||0]:p0; $('im-one-file').value=''; return $('im-one-file').click(); }
-  if(act==='delfile') return guarded(async()=>{ if(!confirm('ลบไฟล์ "'+row.file.path+'" ออกจาก Storage ถาวร?\nย้อนกลับไม่ได้')) return; await removeFiles([row.file.path]); analyze(); render(); notify('ลบไฟล์แล้ว'); });
-  if(act==='unlinkdel') return guarded(async()=>{ if(!confirm('ลบรูปของ "'+p0.name+'" ออกจาก Storage และถอดลิงก์ถาวร?')) return; row.products.forEach(p=>{p.imageUrl=null; if(/^https?:/i.test(p.image||'')) p.image='📦';}); await removeFiles([row.file.path]); await finish('ลบรูปแล้ว'); });
-  if(act==='clearlink') return guarded(async()=>{ p0.imageUrl=null; await finish('ล้างลิงก์เสียของ «'+p0.name+'» แล้ว'); });
-  if(act==='uploadlocal') return guarded(async()=>{ const blob=await (await fetch(imgUrlOf(p0))).blob(); await uploadFor(p0,blob); await finish('อัปโหลดรูปของ «'+p0.name+'» ขึ้น Storage แล้ว'); });
-}
-async function onBulk(kind){
-  if(kind==='link') return guarded(async()=>{ const rs=rowsFor('match'); if(!rs.length) return; if(!confirm('ผูกรูปกับสินค้าตามชื่อที่ตรงกัน '+rs.length+' รายการ?')) return; rs.forEach(r=>setLink(r.products[0],r.file)); await finish('ผูกรูปอัตโนมัติ '+rs.length+' รายการแล้ว'); });
-  if(kind==='delorphan') return guarded(async()=>{ const rs=S.rows.filter(r=>r.status==='orphan'); if(!rs.length) return;
-    const ex=rs.slice(0,5).map(r=>'• '+r.file.path).join('\n');
-    if(!confirm('ลบไฟล์ที่ไม่มีสินค้าอ้างอิง '+rs.length+' ไฟล์ ออกจาก Storage ถาวร?\n\n'+ex+(rs.length>5?'\n…':'')+'\n\nตรวจจากข้อมูลสินค้าในเครื่องนี้ — ควรซิงก์ให้เสร็จก่อน และย้อนกลับไม่ได้')) return;
-    say('กำลังลบ…'); let n=0; const paths=rs.map(r=>r.file.path);
-    for(let i=0;i<paths.length;i+=100){ n+=(await removeFiles(paths.slice(i,i+100))).length; say('กำลังลบ… '+n+'/'+paths.length); }
-    analyze(); render(); say('ลบแล้ว '+n.toLocaleString()+' ไฟล์'); notify('ลบไฟล์กำพร้า '+n+' ไฟล์แล้ว'); });
-  if(kind==='clearbroken') return guarded(async()=>{ const rs=rowsFor('broken'); if(!rs.length) return; if(!confirm('ล้างลิงก์เสีย '+rs.length+' รายการ? (ไม่แตะข้อมูลอื่นของสินค้า)')) return; rs.forEach(r=>{r.p.imageUrl=null;}); await finish('ล้างลิงก์เสีย '+rs.length+' รายการแล้ว'); });
-  if(kind==='uploadlocal') return guarded(async()=>{ const rs=rowsFor('local'); if(!rs.length) return; if(!confirm('อัปโหลดรูปที่เก็บในเครื่อง '+rs.length+' รูป ขึ้น Storage?')) return; let ok=0,bad=0;
-    for(const r of rs){ try{ const blob=await (await fetch(imgUrlOf(r.p))).blob(); await uploadFor(r.p,blob); ok++; }catch(e){ bad++; console.warn(e);} say('กำลังอัปโหลด '+(ok+bad)+'/'+rs.length); }
-    await finish('อัปโหลดสำเร็จ '+ok+' รูป'+(bad?' • ล้มเหลว '+bad:'')); });
-}
-async function bulkUpload(files){
-  if(!files.length) return;
-  guarded(async()=>{
-    if(!S){ S={files:[]}; S.files=await listAll(client()); analyze(); }
-    const prods=S.prods, nameIdx=new Map(), codeIdx=new Map();
-    const add=(m,k,p)=>{ if(!k) return; if(!m.has(k)) m.set(k,[]); m.get(k).push(p); };
-    prods.forEach(p=>{ add(nameIdx,normName(p.name),p); const ck=normName(p.code); if(ck.length>=3) add(codeIdx,ck,p); });
-    const plan=[], miss=[], amb=[], seen=new Map(); let replace=0;
-    for(const f of files){
-      const k=normName(fileBase(f.name)); let c=nameIdx.get(k)||[]; if(!c.length) c=codeIdx.get(k)||[];
-      if(c.length===1){ const p=c[0]; if(seen.has(p)){ amb.push(f.name+' (ซ้ำกับ '+seen.get(p)+')'); continue; } seen.set(p,f.name); if(imgUrlOf(p)) replace++; plan.push({p,f}); }
-      else if(c.length>1) amb.push(f.name+' (ชื่อตรงหลายสินค้า)'); else miss.push(f.name);
-    }
-    if(!plan.length) return alertBox('ไม่มีไฟล์ที่จับคู่ได้','ชื่อไฟล์ต้องตรงกับชื่อสินค้า (หรือรหัสสินค้า) เช่น "สว่านไฟฟ้า 3 หุน.jpg"\nไม่พบ '+files.length+' ไฟล์',true);
-    const msg='เลือก '+files.length+' ไฟล์\n✅ จับคู่ได้ '+plan.length+' (แทนที่รูปเดิม '+replace+')\n❓ ไม่พบสินค้า '+miss.length+(miss.length?'\n   เช่น '+miss.slice(0,3).join(', '):'')+(amb.length?'\n⚠️ ข้าม '+amb.length+' (ชื่อกำกวม/ซ้ำ)':'')+'\n\nอัปโหลดและผูก '+plan.length+' รูป?';
-    if(!confirm(msg)) return;
-    let ok=0,bad=[],i=0;
-    async function worker(){ while(i<plan.length){ const it=plan[i++]; try{ await uploadFor(it.p,it.f); ok++; }catch(e){ bad.push(it.f.name+': '+((e&&e.message)||e)); } say('กำลังอัปโหลด '+(ok+bad.length)+'/'+plan.length+' …'); } }
-    await Promise.all([worker(),worker(),worker()]);
-    await finish('อัปโหลดและผูกสำเร็จ '+ok+' รูป');
-    if(bad.length||miss.length) alertBox('สรุปการอัปโหลด','สำเร็จ '+ok+' • ล้มเหลว '+bad.length+' • ไม่พบสินค้า '+miss.length+(bad.length?'\n\n'+bad.slice(0,5).join('\n'):'')+(miss.length?'\n\nไม่พบสินค้า: '+miss.slice(0,8).join(', ')+(miss.length>8?' …':''):''),!!bad.length);
-  });
-}
-function exportCsv(){
-  if(!S) return notify('กด “ตรวจสอบ” ก่อน');
-  const L={linked:'ผูกแล้ว',shared:'ใช้ร่วมหลายสินค้า',match:'ชื่อตรงรอผูก',conflict:'ซ้ำ/ชนกัน',ambiguous:'ชื่อกำกวม',orphan:'ไม่มีสินค้า',noimg:'สินค้าไม่มีรูป',broken:'ลิงก์เสีย',local:'รูปอยู่ในเครื่อง'};
-  const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"', out=[['ประเภท','สถานะ','ไฟล์','ขนาด(KB)','สินค้า','รหัส']];
-  S.rows.forEach(r=>out.push(['ไฟล์',L[r.status],r.file.path,Math.round((r.file.size||0)/1024),(r.products||[]).map(p=>p.name).join(' | '),(r.products||[]).map(p=>p.code||'').join(' | ')]));
-  S.prodRows.forEach(r=>out.push(['สินค้า',L[r.status],'','',r.p.name,r.p.code||'']));
-  const blob=new Blob(['\ufeff'+out.map(r=>r.map(q).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='product-images-report-'+new Date().toISOString().slice(0,10)+'.csv'; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
-}
-
-/* ---------- ผูกเหตุการณ์ ---------- */
-$('im-scan').addEventListener('click',scan);
-$('im-close').addEventListener('click',()=>{ $('imgmgr').classList.remove('open'); try{window.renderStockTable&&window.renderStockTable();window.renderSaleHome&&window.renderSaleHome();}catch(e){} });
-$('im-csv').addEventListener('click',exportCsv);
-$('im-bulk').addEventListener('click',()=>{ if(!canEdit()) return alertBox('ไม่มีสิทธิ์','บัญชีนี้ไม่มีสิทธิ์แก้ไขสินค้า',true); $('im-bulk-file').value=''; $('im-bulk-file').click(); });
-$('im-bulk-file').addEventListener('change',e=>bulkUpload([...e.target.files]));
-$('im-one-file').addEventListener('change',e=>{ const f=e.target.files[0], p=pendingProd; if(!f||!p) return;
-  guarded(async()=>{ say('กำลังอัปโหลดรูปของ «'+esc(p.name)+'»…'); if(!S){S={files:[]};S.files=await listAll(client());analyze();} await uploadFor(p,f); await finish('อัปโหลดรูปของ «'+p.name+'» แล้ว'); }); });
-$('im-tabs').addEventListener('click',e=>{ const b=e.target.closest('[data-tab]'); if(!b) return; filter=b.dataset.tab; page=1; render(); });
-$('im-bulkbar').addEventListener('click',e=>{ const b=e.target.closest('[data-bulk]'); if(b) onBulk(b.dataset.bulk); });
-$('im-list').addEventListener('click',e=>{ const b=e.target.closest('[data-act]'); if(!b) return; const r=rowByEl(b); if(r) onAct(b.dataset.act,r,b.dataset.j!==undefined?+b.dataset.j:0); });
-$('im-more').addEventListener('click',e=>{ if(e.target.closest('#im-more-btn')){ page++; renderList(); } });
-$('im-picker-q').addEventListener('input',e=>drawPicker(e.target.value));
-$('im-picker-x').addEventListener('click',closePicker);
-$('im-picker').addEventListener('click',e=>{ if(e.target.id==='im-picker') closePicker(); const b=e.target.closest('[data-pid]'); if(b&&pickerCb){ const cb=pickerCb, id=b.dataset.pid; closePicker(); cb(id); } });
-window.openImageManager=function(){ $('imgmgr').classList.add('open'); if(!S) say('กด “ตรวจสอบ” เพื่อนับรูปใน Storage และจับคู่กับสินค้า (ชื่อไฟล์ตรงกับชื่อสินค้า หรือรหัสสินค้า)'); };
-})();
-</script>
 
 <script id="header-tips-runtime">
 (function(){
