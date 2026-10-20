@@ -1006,7 +1006,7 @@ img, video { max-width: 100%; height: auto; }
 
           <div class="border-t pt-3">
             <h4 class="text-xs font-bold text-slate-500 mb-2">เลือกรายการสินค้าเพื่อรับเข้า</h4>
-            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-3 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 mb-3 text-xs">
               <div class="sm:col-span-2 relative">
                 <input type="text" id="po-product-search" placeholder="🔍 พิมพ์ชื่อ / SKU / บาร์โค้ดเพื่อค้นหาสินค้า..." autocomplete="off"
                   oninput="window.filterPOProductPicker()" onfocus="window.filterPOProductPicker()"
@@ -1014,8 +1014,11 @@ img, video { max-width: 100%; height: auto; }
                 <input type="hidden" id="po-product-picker-value">
                 <div id="po-product-picker-results" class="hidden absolute z-20 top-full left-0 right-0 bg-white border rounded-xl shadow-xl mt-1 max-h-72 overflow-y-auto"></div>
               </div>
-              <input type="number" id="po-item-qty" placeholder="จำนวนรับเข้า" class="bg-slate-50 border p-2.5 rounded-xl font-bold text-center outline-none">
-              <input type="number" id="po-item-cost" placeholder="ราคาทุนบิลนี้" class="bg-slate-50 border p-2.5 rounded-xl font-bold text-center outline-none">
+              <select id="po-variant-select" onchange="window.onPOVariantChange()" class="bg-slate-50 border p-2.5 rounded-xl font-bold text-slate-800 outline-none" aria-label="เลือกรุ่นหรือขนาดสินค้า">
+                <option value="">เลือกรุ่น/ขนาด</option>
+              </select>
+              <input type="number" id="po-item-qty" min="0.001" step="any" placeholder="จำนวนรับเข้า" class="bg-slate-50 border p-2.5 rounded-xl font-bold text-center outline-none">
+              <input type="number" id="po-item-cost" min="0" step="any" placeholder="ราคาทุนต่อหน่วย" class="bg-slate-50 border p-2.5 rounded-xl font-bold text-center outline-none">
             </div>
             <button onclick="window.addItemToPOList()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs btn-touch">
               + เพิ่มรายการเข้าใบรับของ
@@ -1071,6 +1074,22 @@ img, video { max-width: 100%; height: auto; }
       <!-- VIEW 4: SALES / RECEIVABLES / RETURNS (รวมขาย, ลูกหนี้, ยอดค้าง, ใบเสร็จ, คืนสินค้า) -->
       <section id="view-history" class="view-content hidden fade-in space-y-4">
         <h3 class="text-xl font-extrabold text-slate-800">🧾 ขาย, ลูกหนี้ & คืนสินค้า</h3>
+
+        <div class="bg-white p-4 rounded-3xl border shadow-sm">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-2 mb-3">
+            <h4 class="text-sm font-extrabold text-emerald-700">📈 รายงานกำไรขั้นต้นจาก Supabase</h4>
+            <button type="button" onclick="window.loadProfitReport()" class="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold">โหลดรายงาน</button>
+          </div>
+          <p class="text-xs text-slate-500 mb-3">คำนวณจากราคาทุนที่บันทึกไว้ ณ เวลาขาย หักยอดคืนและต้นทุนสินค้าที่คืน ไม่ใช่กำไรสุทธิหลังค่าใช้จ่าย</p>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+            <label class="text-xs font-bold text-slate-600">ตั้งแต่วันที่<input id="profit-from" type="date" class="block w-full mt-1 border rounded-xl p-2 text-sm"></label>
+            <label class="text-xs font-bold text-slate-600">ถึงวันที่<input id="profit-to" type="date" class="block w-full mt-1 border rounded-xl p-2 text-sm"></label>
+            <div class="flex items-end"><button type="button" onclick="window.loadProfitReport()" class="w-full px-3 py-2 rounded-xl bg-slate-800 text-white text-sm font-bold">ค้นหาตามช่วงวันที่</button></div>
+          </div>
+          <div id="profit-report-status" class="text-xs text-slate-500 mb-2" role="status">กดโหลดรายงานเพื่ออ่านข้อมูลจากฐานข้อมูล</div>
+          <div id="profit-report-summary" class="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3"></div>
+          <div class="overflow-x-auto"><table class="w-full text-xs min-w-[760px]"><thead class="bg-slate-50 text-slate-600"><tr><th class="p-2 text-left">วันที่</th><th class="p-2 text-left">เลขที่บิล</th><th class="p-2 text-left">วิธีชำระ</th><th class="p-2 text-right">ยอดสุทธิ</th><th class="p-2 text-right">ต้นทุนสุทธิ</th><th class="p-2 text-right">กำไรขั้นต้น</th><th class="p-2 text-center">ต้นทุน</th></tr></thead><tbody id="profit-report-rows"><tr><td colspan="7" class="p-3 text-center text-slate-400">ยังไม่มีข้อมูลรายงาน</td></tr></tbody></table></div>
+        </div>
 
         <div class="bg-white p-4 rounded-3xl border shadow-sm">
           <h4 class="text-sm font-extrabold text-rose-700 border-b pb-2 mb-3">💰 ลูกหนี้การค้า & ยอดค้างชำระ</h4>
@@ -2190,6 +2209,9 @@ window.formatMoney = formatMoney;
       };
 
       // Unified first-owner bootstrap: there is no separate setup modal or wizard.
+      // Important security note: PIN-only employee selection is client-side attribution;
+      // it is not a separate Supabase identity. The linked Supabase Auth account is the
+      // database security boundary, so do not share that Auth credential outside the shop.
       // New-account metadata stores only the PIN hash, never the raw PIN.
       window.checkAndBootstrapOwner = async function() {
         const client = window.getSupabaseClient();
@@ -2549,88 +2571,35 @@ window.formatMoney = formatMoney;
         if (!client) return false;
 
         try {
-          // 1. Shifts — column names in this schema: opening_cash/closing_cash (not
-          // starting_cash/ending_cash), opened_at/closed_at, status 'OPEN'/'CLOSED' (uppercase).
-          const shiftRows = (db.shifts || []).map(s => ({
-            id: toUUID(s.id),
-            opened_at: new Date(s.startTime).toISOString(),
-            closed_at: s.endTime ? new Date(s.endTime).toISOString() : null,
-            opening_cash: roundAmt(s.openingCash),
-            closing_cash: s.cashOnHand ? roundAmt(s.cashOnHand) : null,
-            status: s.endTime ? 'CLOSED' : 'OPEN'
-          }));
-          if (shiftRows.length > 0) {
-            const { error: shiftErr } = await client.from('shifts').upsert(shiftRows, { onConflict: 'id' });
-            if (shiftErr) throw shiftErr;
+          // 1. Shifts: only create OPEN shifts through the validated RPC. Closed shifts must
+          // be finalized by close_shift; the browser never upserts shift state directly.
+          for (const s of (db.shifts || []).filter(x => !x.endTime)) {
+            const { error } = await client.rpc('open_shift', {
+              p_shift_id: toUUID(s.id), p_opening_cash: roundAmt(s.openingCash),
+              p_opened_at: new Date(s.startTime).toISOString()
+            });
+            if (error) throw error;
           }
 
           // 2. Bills — (v10) ไม่เขียนบิลตรงเข้าตารางอีกต่อไป: บิลทั้งหมดไปทาง create_sale (คิวซิงค์) เท่านั้น
           //    เพื่อให้เซิร์ฟเวอร์ตรวจสต็อก/วงเงิน/ส่วนลดเสมอ ไม่มี fallback ที่ข้ามกฎได้
 
-          // 3. Cash Ledger — real cash-drawer movements only (AR payments received, cash
-          // refunds, and manual cash-in/cash-out recorded during a shift). id is synthesized
-          // per source since these were never given a stable id shaped for toUUID() the way
-          // bills/products are.
-          const cashLedgerRows = [];
-          (db.cashLedger || []).forEach(cl => {
-            if (!cl._viaRpc && (cl.type === 'cash-in-ar' || cl.type === 'expense-refund')) {   // รายการที่ไปทาง RPC แล้วห้ามส่งซ้ำ
-              cashLedgerRows.push({
-                id: toUUID(cl.id),
-                shift_id: cl.shiftId ? toUUID(cl.shiftId) : null,
-                type: cl.type,
-                income: roundAmt(cl.income || 0),
-                expense: roundAmt(cl.expense || 0),
-                description: cl.description || null,
-                ref_id: cl.refId || null,
-                created_at: new Date(cl.time).toISOString()
+          // 3. Cash drawer manual movements: append-only RPC with server-side open-shift check.
+          // AR receipts and refunds already have their own transaction RPCs; never mirror them here.
+          for (const s of (db.shifts || [])) {
+            for (const m of (s.movements || [])) {
+              if (m._viaRpc) continue;
+              const { error } = await client.rpc('record_cash_movement', {
+                p_shift_id: toUUID(s.id), p_op_ref: String(m.id), p_type: m.type,
+                p_amount: roundAmt(m.amount), p_note: m.note || null,
+                p_created_at: new Date(m.time).toISOString()
               });
+              if (error) throw error;
             }
-            // 'ACCOUNTS_PAYABLE' entries are handled separately below (accounts_payable table) —
-            // they represent a balance owed, not a cash-drawer movement, so they don't belong here.
-          });
-          (db.shifts || []).forEach(s => {
-            (s.movements || []).forEach(m => {
-              cashLedgerRows.push({
-                id: toUUID(m.id),
-                shift_id: toUUID(s.id),
-                type: m.type === 'IN' ? 'SHIFT_CASH_IN' : 'SHIFT_CASH_OUT',
-                income: m.type === 'IN' ? roundAmt(m.amount) : 0,
-                expense: m.type === 'OUT' ? roundAmt(m.amount) : 0,
-                description: m.note || null,
-                ref_id: null,
-                created_at: new Date(m.time).toISOString()
-              });
-            });
-          });
-          if (cashLedgerRows.length > 0) {
-            const { error: cashErr } = await client.from('cash_ledger').upsert(cashLedgerRows, { onConflict: 'id' });
-            if (cashErr) throw cashErr;
           }
 
-          // 4. Accounts Payable — outstanding supplier debt from goods receipts
-          // (window.confirmReceivePO). purchase_order_id links to the purchase_orders row
-          // created by that receipt's own background sync (window.syncGoodsReceiptToSupabase),
-          // which stores its server-generated id back onto the AP entry as
-          // _serverPurchaseOrderId — already a real Supabase uuid, so it's used as-is rather
-          // than passed through toUUID(). Falls back to null if that sync hasn't completed yet
-          // (offline, or still in flight) — the next sync pass will fill it in once it has.
-          const apRows = (db.cashLedger || [])
-            .filter(cl => cl.type === 'ACCOUNTS_PAYABLE')
-            .map(ap => ({
-              id: toUUID(ap.id),
-              supplier_id: ap.supplierId ? toUUID(ap.supplierId) : null,
-              purchase_order_id: ap._serverPurchaseOrderId || null,
-              doc_ref: ap.docRef || null,
-              amount: roundAmt(ap.amount || 0),
-              credit_terms: ap.terms || 30,
-              status: ap.status || 'OPEN',
-              created_at: new Date(ap.createdAt).toISOString(),
-              paid_at: ap.paidAt ? new Date(ap.paidAt).toISOString() : null
-            }));
-          if (apRows.length > 0) {
-            const { error: apErr } = await client.from('accounts_payable').upsert(apRows, { onConflict: 'id' });
-            if (apErr) throw apErr;
-          }
+          // 4. Accounts payable are created atomically by receive_goods(). Do not upsert
+          // accounts_payable from the browser; that could fabricate or overwrite liabilities.
 
           return true;
         } catch (err) {
@@ -3345,7 +3314,7 @@ window.formatMoney = formatMoney;
           return alert("กรณีค้างชำระ จำเป็นต้องเลือกชื่อลูกค้าก่อนบันทึก");
         }
 
-        // Credit-limit check — this schema's create_sale RPC does not enforce credit_limit
+        // Credit-limit check — create_sale also validates the limit inside the database RPC
         // itself (it only carries the column), so this client-side check is the only
         // enforcement there is; per the manual's "ตรวจสอบวงเงินเครดิต" description, previously
         // this wasn't enforced client-side at all either, so bills could exceed a customer's
@@ -4085,10 +4054,21 @@ window.formatMoney = formatMoney;
       window.onPOProductChange = function() {
         const pid = document.getElementById('po-product-picker-value').value;
         const p = db.products[pid];
-        if (p && p.variants[0]) {
-          document.getElementById('po-item-cost').value = p.variants[0].cost;
-          document.getElementById('po-item-qty').value = 1;
-        }
+        const select = document.getElementById('po-variant-select');
+        if (!select) return;
+        const variants = (p?.variants || []).filter(v => v && v.id);
+        select.innerHTML = variants.length ? variants.map(v => `<option value="${escapeHTML(v.id)}">${escapeHTML(v.sizeName || 'ปกติ')} · SKU ${escapeHTML(v.sku || '-')} · คงเหลือ ${Number(v.stock || 0)}</option>`).join('') : '<option value="">ไม่มีรุ่นสินค้า</option>';
+        select.disabled = variants.length === 0;
+        window.onPOVariantChange();
+      };
+
+      window.onPOVariantChange = function() {
+        const pid = document.getElementById('po-product-picker-value')?.value;
+        const p = db.products[pid];
+        const vid = document.getElementById('po-variant-select')?.value;
+        const v = (p?.variants || []).find(x => String(x.id) === String(vid));
+        document.getElementById('po-item-cost').value = v ? (Number(v.cost) || 0) : '';
+        if (v && !document.getElementById('po-item-qty').value) document.getElementById('po-item-qty').value = 1;
       };
 
       window.filterPOProductPicker = function() {
@@ -4131,7 +4111,7 @@ window.formatMoney = formatMoney;
         const p = db.products[pid];
         if (!p) return;
         document.getElementById('po-product-picker-value').value = pid;
-        document.getElementById('po-product-search').value = p.name + (p.variants?.[0] ? ` (${p.variants[0].sizeName})` : '');
+        document.getElementById('po-product-search').value = p.name;
         document.getElementById('po-product-picker-results').classList.add('hidden');
         window.onPOProductChange();
       };
@@ -4152,7 +4132,7 @@ window.formatMoney = formatMoney;
         container.innerHTML = poTempItems.length ? poTempItems.map((item, idx) => `
           <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border text-xs">
             <div class="flex-1 min-w-0">
-              <b class="text-slate-800 block truncate">${escapeHTML(item.productName)}</b>
+              <b class="text-slate-800 block truncate">${escapeHTML(item.productName)} <span class="text-indigo-600">(${escapeHTML(item.variantName || 'รุ่นปกติ')})</span></b>
               <div class="flex items-center gap-1.5 mt-1">
                 <input type="number" min="0" step="any" value="${item.qty}" oninput="window.updatePOItemField(${idx},'qty',this.value)" class="w-16 border rounded-lg text-center py-1 font-bold outline-none focus:ring-2 focus:ring-indigo-500">
                 <span class="text-slate-400">ชิ้น ×</span>
@@ -4269,12 +4249,17 @@ window.formatMoney = formatMoney;
         if (!pid || qty <= 0) return window.showAlert ? window.showAlert("ข้อมูลไม่ครบ", "กรุณาค้นหาและเลือกสินค้า พร้อมระบุจำนวนให้ถูกต้อง", true) : alert("กรุณาเลือกสินค้าและระบุจำนวนให้ถูกต้อง");
 
         const p = db.products[pid];
-        poTempItems.push({ productId: pid, productName: p.name, qty, cost, total: roundAmt(qty * cost) });
+        const variantId = document.getElementById('po-variant-select').value;
+        const variant = (p?.variants || []).find(v => String(v.id) === String(variantId));
+        if (!p || !variant) return window.showAlert?.('เลือกรุ่นสินค้า', 'กรุณาเลือกสินค้ารุ่น/ขนาดที่จะรับเข้าให้ถูกต้อง', true);
+        poTempItems.push({ productId: pid, variantId: variant.id, variantName: variant.sizeName || 'ปกติ', productName: p.name, qty, cost, total: roundAmt(qty * cost) });
         window.renderPOCartList();
 
         // Reset the picker so the next item can be searched for immediately.
         document.getElementById('po-product-search').value = '';
         document.getElementById('po-product-picker-value').value = '';
+        document.getElementById('po-variant-select').innerHTML = '<option value="">เลือกรุ่น/ขนาด</option>';
+        document.getElementById('po-variant-select').disabled = true;
         document.getElementById('po-item-qty').value = '';
         document.getElementById('po-item-cost').value = '';
       };
@@ -4843,11 +4828,12 @@ window.formatMoney = formatMoney;
           _restock.push({ variantId: item.variantId, qty: returnQty * (item.multiplier || 1) });
 
           rpcItems.push({
+            product_id: item.id || null,
+            item_name: item.name || null,
             variant_id: item.variantId || null,
             fraction_id: item.fractionId || null,
             quantity: returnQty,
-            // Send the actual refunded unit price after the original bill discount ratio,
-            // so the server-side refund total matches the amount shown to the cashier.
+            // Server recalculates the refundable unit price from the original bill.
             unit_price: roundAmt(item.price * _ratio)
           });
         });
@@ -4886,7 +4872,7 @@ window.formatMoney = formatMoney;
         // ก็ยังถูกต้องในเครื่องเหมือนเดิม แค่รอ sync รอบถัดไปไม่ได้ (ไม่มี batch fallback สำหรับ
         // การคืนสินค้าในตอนนี้ เพราะต้องรู้ bill server-side id ก่อน — ปล่อยให้กดซิงค์ใหม่ได้จาก
         // ปุ่ม forceSyncNow ถ้าพลาดจริง)
-        window.enqueueSync({ type: 'return', payload: { billId: bill.id, items: rpcItems.map(i => ({ variant_id: i.variant_id, fraction_id: i.fraction_id, quantity: i.quantity, unit_price: i.unit_price })), restock: _restock, returnRef: creditNoteNo, shiftId: db.currentShift?.id || null, isCredit, customerId: bill.customerId, refund: refundTotal, fully: fullyReturned } });
+        window.enqueueSync({ type: 'return', payload: { billId: bill.id, items: rpcItems.map(i => ({ product_id: i.product_id, item_name: i.item_name, variant_id: i.variant_id, fraction_id: i.fraction_id, quantity: i.quantity, unit_price: i.unit_price })), restock: _restock, returnRef: creditNoteNo, shiftId: db.currentShift?.id || null, isCredit, customerId: bill.customerId, refund: refundTotal, fully: fullyReturned } });
       };
 
       window.syncReturnToSupabaseRPC = function() { /* v10: ใช้คิวซิงค์ (type 'return') แทน */ };
@@ -5989,7 +5975,8 @@ window.confirmReceivePO=async function(){if(!ok('GOODS_RECEIPT'))return;const su
       }catch(e){receipt.deliveryNoteUrls.push(f.dataUrl);console.warn('delivery note upload error, kept locally',e);}
     }
   }
-  db.purchaseOrders=db.purchaseOrders||[];db.purchaseOrders.push(receipt);for(const x of poTempItems){const p=db.products[x.productId],v=p?.variants?.[0];if(v){{const _os=Math.max(0,+v.stock||0),_q=+x.qty||0,_nc=+x.cost||0;if(_nc>0){v.cost=_os>0?roundAmt((_os*(+v.cost||0)+_q*_nc)/(_os+_q)):_nc;}v.stock=(+v.stock||0)+_q;}}}db.cashLedger=db.cashLedger||[];const apEntry={id:'AP-'+Date.now(),type:'ACCOUNTS_PAYABLE',supplierId,docRef,amount:poTempItems.reduce((a,x)=>a+x.total,0),terms,status:'OPEN',createdAt:receipt.receivedAt};db.cashLedger.push(apEntry);persist();const itemsForSync=receipt.items;poTempItems.length=0;window.renderPOCartList();window.renderStockTable();window.renderPurchaseHistory();window.clearDeliveryNote?.();window.showToast?.('รับสินค้าเข้าคลังและบันทึกเจ้าหนี้สำเร็จ');document.getElementById('po-doc-ref').value='';
+  for(const x of poTempItems){const p=db.products[x.productId],v=(p?.variants||[]).find(y=>String(y.id)===String(x.variantId));if(!v) return window.showAlert?.('รุ่นสินค้าไม่ถูกต้อง','ไม่พบรุ่นสินค้าที่ระบุในรายการรับเข้า: '+(x.productName||x.productId),true);}
+  db.purchaseOrders=db.purchaseOrders||[];db.purchaseOrders.push(receipt);for(const x of poTempItems){const p=db.products[x.productId],v=(p?.variants||[]).find(y=>String(y.id)===String(x.variantId));const _os=Math.max(0,+v.stock||0),_q=+x.qty||0,_nc=+x.cost||0;if(_q>0){v.cost=_os>0?roundAmt((_os*(+v.cost||0)+_q*_nc)/(_os+_q)):roundAmt(_nc);}v.stock=(+v.stock||0)+_q;}db.cashLedger=db.cashLedger||[];const apEntry={id:'AP-'+Date.now(),type:'ACCOUNTS_PAYABLE',supplierId,docRef,amount:poTempItems.reduce((a,x)=>a+x.total,0),terms,status:'OPEN',createdAt:receipt.receivedAt};db.cashLedger.push(apEntry);persist();const itemsForSync=receipt.items;poTempItems.length=0;window.renderPOCartList();window.renderStockTable();window.renderPurchaseHistory();window.clearDeliveryNote?.();window.showToast?.('รับสินค้าเข้าคลังและบันทึกเจ้าหนี้สำเร็จ');document.getElementById('po-doc-ref').value='';
   // Best-effort authoritative push to Supabase via the proper purchase_orders →
   // purchase_order_items → receive_purchase_order RPC flow (the schema's real, atomic
   // receiving path — it locks rows, validates received quantity against ordered quantity, and
@@ -6263,6 +6250,36 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
     try {
       if (typeof window.ensureShiftForClose !== 'function') throw new Error('ยังไม่ได้เปิดใช้ตัวเชื่อมต่อกะกับ Supabase');
       const shiftUuid = await window.ensureShiftForClose(s.id);
+      // Flush manual drawer movements before close_shift closes this shift.
+      for (const m of (s.movements || [])) {
+        if (m._viaRpc) continue;
+        const { error: movementError } = await c.rpc('record_cash_movement', {
+          p_shift_id: shiftUuid, p_op_ref: String(m.id), p_type: m.type,
+          p_amount: roundAmt(m.amount), p_note: m.note || null,
+          p_created_at: new Date(m.time).toISOString()
+        });
+        if (movementError) throw movementError;
+      }
+      // Reconcile against the database after pending manual movements have been flushed.
+      // The local summary is a preview only; the server ledger is authoritative.
+      const { data: reconciliation, error: reconciliationError } = await c.rpc('get_shift_reconciliation', {
+        p_shift_id: shiftUuid
+      });
+      if (reconciliationError) throw reconciliationError;
+      if (!reconciliation || reconciliation.shift_id !== shiftUuid) throw new Error('Supabase ไม่ได้ส่งผลกระทบยอดกะกลับมา');
+      if (reconciliation.status !== 'OPEN') throw new Error('กะนี้ไม่ได้อยู่ในสถานะเปิด จึงปิดซ้ำไม่ได้');
+      const serverExpected = roundAmt(Number(reconciliation.expected_cash));
+      const serverDiff = roundAmt(actual - serverExpected);
+      if (serverDiff !== 0 && !diffNote) {
+        const noteWrap = document.getElementById('shift-diff-note-wrap');
+        if (noteWrap) noteWrap.classList.remove('hidden');
+        const diffEl = document.getElementById('shift-close-diff');
+        if (diffEl) diffEl.innerHTML = serverDiff > 0
+          ? `<span class="text-indigo-600">ยอดจากฐานข้อมูล: เงินเกิน ${fmt(serverDiff)} — กรุณาระบุสาเหตุ</span>`
+          : `<span class="text-rose-600">ยอดจากฐานข้อมูล: เงินขาด ${fmt(Math.abs(serverDiff))} — กรุณาระบุสาเหตุ</span>`;
+        window._shiftCloseSummary = { ...(window._shiftCloseSummary || sum), expectedCash: serverExpected };
+        throw new Error('ยอดเงินสดที่นับได้ไม่ตรงกับยอดคาดการณ์จาก Supabase กรุณาระบุสาเหตุ แล้วกดยืนยันปิดกะอีกครั้ง');
+      }
       const { data, error } = await c.rpc('close_shift', {
         p_shift_id: shiftUuid,
         p_actual_cash: roundAmt(actual),
@@ -6275,6 +6292,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
       s.closedBy = db.activeUser?.name || '-';
       s.summary = sum;
       s.diff = roundAmt(actual - Number(data.expected_cash ?? sum.expectedCash));
+      s.cloudReconciliation = reconciliation;
       s.diffNote = s.diff !== 0 ? diffNote : '';
       s.cloudCloseResult = data;
       db.currentShift = null;
@@ -6922,7 +6940,11 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
     if (!shiftId) return;
     const s = (db.shifts || []).find(x => x.id === shiftId) || (db.currentShift && db.currentShift.id === shiftId ? db.currentShift : null);
     if (!s) return;
-    const { error } = await c.from('shifts').upsert([window._shiftRow(s)], { onConflict: 'id' });
+    if (s.endTime) throw new Error('กะนี้ปิดแล้วและไม่สามารถสร้างซ้ำผ่าน open_shift ได้');
+    const { error } = await c.rpc('open_shift', {
+      p_shift_id: toUUID(s.id), p_opening_cash: roundAmt(s.openingCash),
+      p_opened_at: new Date(s.startTime).toISOString()
+    });
     if (error) throw error;
   }
   // ใช้จาก flow ปิดกะเท่านั้น: คืน UUID เดียวกับที่ upsert ไป Supabase
@@ -7047,6 +7069,8 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
     const { error } = await c.rpc('process_return', {
       p_bill_id: bill._serverBillId || toUUID(bill.id),
       p_items: (p.items || []).map(i => ({
+        product_id: i.product_id ? toUUID(i.product_id) : null,
+        item_name: i.item_name || null,
         variant_id: i.variant_id ? toUUID(i.variant_id) : null,
         fraction_id: i.fraction_id ? toUUID(i.fraction_id) : null,
         quantity: +i.quantity || 0,
@@ -7088,8 +7112,9 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
       if (se) throw se;
     }
     const items = (r.items || []).map(x => {
-      const v = db.products[x.productId]?.variants?.[0];
-      return { product_id: toUUID(x.productId), variant_id: v && v.id ? toUUID(v.id) : null, quantity: +x.qty, unit_cost: +x.cost || 0 };
+      const v = (db.products[x.productId]?.variants || []).find(y => String(y.id) === String(x.variantId));
+      if (!v || !v.id) throw new Error('ไม่พบรุ่นสินค้าที่ระบุในใบรับเข้า: ' + (x.productName || x.productId));
+      return { product_id: toUUID(x.productId), variant_id: toUUID(v.id), quantity: +x.qty, unit_cost: +x.cost || 0 };
     });
     const { data, error } = await c.rpc('receive_goods', {
       p_client_ref: r.id, p_supplier_id: toUUID(r.supplierId), p_doc_ref: r.docRef || null,
@@ -7172,6 +7197,54 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
   window.retryFailedSyncOps = function () {
     (db.syncQueue || []).forEach(o => { if (o.status === 'failed') { o.status = 'pending'; o.tries = 0; } });
     if (window.persist) window.persist();
+  };
+
+  // Round 13/14: display the server-calculated gross-profit report. Never derive COGS from current prices in the browser.
+  window.loadProfitReport = async function () {
+    const status = document.getElementById('profit-report-status');
+    const body = document.getElementById('profit-report-rows');
+    const summary = document.getElementById('profit-report-summary');
+    if (!status || !body || !summary) return;
+    const c = client();
+    if (!c) { status.textContent = 'ยังไม่ได้เชื่อมต่อ Supabase'; return; }
+    const fromValue = document.getElementById('profit-from')?.value || '';
+    const toValue = document.getElementById('profit-to')?.value || '';
+    if (fromValue && toValue && fromValue > toValue) { status.textContent = 'วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด'; return; }
+    const toNextDay = (dateText) => {
+      if (!dateText) return null;
+      const [y,m,d] = dateText.split('-').map(Number);
+      const next = new Date(Date.UTC(y, m - 1, d + 1));
+      return `${next.getUTCFullYear()}-${String(next.getUTCMonth()+1).padStart(2,'0')}-${String(next.getUTCDate()).padStart(2,'0')}T00:00:00+07:00`;
+    };
+    const p_from = fromValue ? `${fromValue}T00:00:00+07:00` : null;
+    const p_to = toNextDay(toValue);
+    status.textContent = 'กำลังอ่านรายงานจากฐานข้อมูล…';
+    body.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-slate-400">กำลังโหลด…</td></tr>';
+    try {
+      const { data, error } = await c.rpc('get_profit_report', { p_from, p_to });
+      if (error) throw error;
+      const rows = Array.isArray(data) ? data : [];
+      const sum = (key) => rows.reduce((acc, row) => acc + (Number(row[key]) || 0), 0);
+      const money = (value) => (Number(value) || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const tile = (label, value, extra='') => `<div class="rounded-xl bg-slate-50 border p-3"><div class="text-[11px] text-slate-500">${label}</div><div class="text-base font-black text-slate-800">฿${money(value)}</div>${extra}</div>`;
+      const missing = rows.filter(row => row.cost_missing).length;
+      summary.innerHTML = tile('ยอดขายสุทธิ', sum('net_revenue')) + tile('ต้นทุนสุทธิ', sum('net_cost')) + tile('กำไรขั้นต้น', sum('gross_profit')) + tile('บิลที่ต้องตรวจต้นทุน', missing, `<div class="text-[10px] text-amber-700">จาก ${rows.length} บิล</div>`);
+      if (!rows.length) { body.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-slate-400">ไม่พบข้อมูลในช่วงวันที่นี้</td></tr>'; }
+      else {
+        body.innerHTML = rows.map(row => {
+          const dt = row.sold_at ? new Date(row.sold_at).toLocaleString('th-TH') : '-';
+          const bill = String(row.bill_number ?? '');
+          const method = String(row.payment_method ?? '-');
+          const costFlag = row.cost_missing ? '<span class="text-amber-700 font-bold">ตรวจสอบ</span>' : '<span class="text-emerald-700">ครบ</span>';
+          return `<tr class="border-t"><td class="p-2 whitespace-nowrap">${dt}</td><td class="p-2">${bill.replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}</td><td class="p-2">${method.replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}</td><td class="p-2 text-right">฿${money(row.net_revenue)}</td><td class="p-2 text-right">฿${money(row.net_cost)}</td><td class="p-2 text-right font-bold">฿${money(row.gross_profit)}</td><td class="p-2 text-center">${costFlag}</td></tr>`;
+        }).join('');
+      }
+      status.textContent = `โหลดสำเร็จ ${rows.length} บิล · ยอดและต้นทุนมาจาก RPC ของ Supabase`;
+    } catch (err) {
+      body.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-rose-600">โหลดรายงานไม่สำเร็จ</td></tr>';
+      summary.innerHTML = '';
+      status.textContent = 'โหลดรายงานไม่สำเร็จ: ' + errMsg(err) + ' — ตรวจว่าติดตั้ง SQL รุ่นที่มี get_profit_report แล้ว และบัญชีมี Supabase Auth';
+    }
   };
 
   window.checkServerSchema = async function () {
@@ -7334,9 +7407,9 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
        try {
         const {data:{session},error:sessionError}=await client.auth.getSession();
         if(sessionError||!session?.user) continue;
-        const u=window.db?.activeUser||{};
-        const row={id:crypto.randomUUID(),occurred_at:ev.time,actor_app_user_id:null,actor_name:String(u.name||session.user.email||'ผู้ใช้ที่ยืนยันตัวตนแล้ว').slice(0,160),actor_role:String(u.role||'UNKNOWN').slice(0,40),action:String(ev.type||'INFO').slice(0,80),entity:'application',entity_id:null,detail:(String(ev.message||'')+' '+String(ev.detail||'')).trim().slice(0,4000),meta:{source:'Smart POS Activity Log',email:session.user.email||null},device_id:String(window.getDeviceId?.()||'browser').slice(0,160)};
-        const {error}=await client.from('audit_logs').insert(row);
+        // Actor is derived by the server from auth.uid(); never trust the browser's PIN-selected user.
+        const details={message:String(ev.message||'').slice(0,2000),detail:String(ev.detail||'').slice(0,2000),source:'Smart POS Activity Log',email:session.user.email||null,device_id:String(window.getDeviceId?.()||'browser').slice(0,160),client_time:ev.time};
+        const {error}=await client.rpc('record_audit_event',{p_action:String(ev.type||'INFO').slice(0,80),p_entity_type:'application',p_entity_id:null,p_details:details});
         if(error && !window.__spAuditWarned){window.__spAuditWarned=true;const a=read();a.unshift({time:new Date().toISOString(),type:'WARN',message:'ส่ง Audit Log ไป Supabase ไม่สำเร็จ',detail:String(error.message||error).slice(0,500)});try{localStorage.setItem(KEY,JSON.stringify(a.slice(0,MAX)))}catch(_){}}
        } catch(err) { if(!window.__spAuditWarned){window.__spAuditWarned=true;const a=read();a.unshift({time:new Date().toISOString(),type:'WARN',message:'ส่ง Audit Log ไป Supabase ไม่สำเร็จ',detail:String(err?.message||err).slice(0,500)});try{localStorage.setItem(KEY,JSON.stringify(a.slice(0,MAX)))}catch(_){}} }
       }
