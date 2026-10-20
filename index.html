@@ -820,7 +820,7 @@ img, video { max-width: 100%; height: auto; }
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b pb-3">
             <div>
               <h3 class="text-xl font-extrabold text-slate-800 tracking-tight">📦 สินค้าทั้งหมดและตารางเช็กคลัง</h3>
-              <p class="text-xs text-slate-400 mt-0.5">รวมสินค้าทั้งหมด: <b id="stock-total-count" class="text-indigo-600 font-bold">0</b> รายการ • มูลค่าสต็อกรวม (ทุน): <b id="stock-total-value" class="text-indigo-600 font-bold">฿0</b></p>
+              <p class="text-xs text-slate-400 mt-0.5">รวมสินค้าทั้งหมด: <b id="stock-product-count" class="text-indigo-600 font-bold">0</b> สินค้า (<b id="stock-total-count" class="text-indigo-600 font-bold">0</b> ขนาด/หน่วย) • มูลค่าสต็อกรวม (ทุน): <b id="stock-total-value" class="text-indigo-600 font-bold">฿0</b></p>
             </div>
             
             <!-- Quick Action Toolbar -->
@@ -3081,7 +3081,8 @@ window.formatMoney = formatMoney;
         productGridPage = Math.max(0, Math.min(productGridPage, totalPages - 1));
         const pageItems = visibleList.slice(productGridPage * productsPerPage, (productGridPage + 1) * productsPerPage);
 
-        document.getElementById('current-cat-title').textContent = `${_lastProductTitle} (${visibleList.length} รายการ)`;
+        const _productCount = visibleList.reduce((n, c) => n + (c.__virtual ? (c._memberIds || []).length : 1), 0);
+        document.getElementById('current-cat-title').textContent = `${_lastProductTitle} (${visibleList.length} การ์ด • ${_productCount} สินค้า)`;
         document.getElementById('product-page-indicator').textContent = `หน้า ${productGridPage + 1}/${totalPages}`;
         document.getElementById('product-grid').innerHTML = pageItems.length
           ? pageItems.map(window.renderProductCard).join('')
@@ -3630,7 +3631,9 @@ window.formatMoney = formatMoney;
 
         let flt = [];
         Object.values(db.products).forEach(p => {
-          (p.variants || []).forEach((v) => {
+          // สินค้าที่ยังไม่มีขนาด/หน่วย ก็ต้องแสดงในตาราง (เดิมถูกข้ามไป ทำให้จำนวนไม่ตรงกับหน้าขาย)
+          const variantsForRows = (p.variants && p.variants.length) ? p.variants : [{ sizeName: '(ยังไม่มีขนาด)', barcode: '', cost: 0, price: 0, stock: 0, minStock: 0 }];
+          variantsForRows.forEach((v) => {
             const isMatchSearch = p.name.toLowerCase().includes(search) ||
                                  (p.code || '').toLowerCase().includes(search) ||
                                  (v.barcode || '').toLowerCase().includes(search);
@@ -3650,6 +3653,7 @@ window.formatMoney = formatMoney;
         });
 
         document.getElementById('stock-total-count').innerText = flt.length;
+        document.getElementById('stock-product-count').innerText = new Set(flt.map(x => x.p.id)).size;
         const totalStockValue = flt.reduce((s, item) => s + ((+item.v.cost || 0) * (+item.v.stock || 0)), 0);
         document.getElementById('stock-total-value').innerText = '฿' + roundAmt(totalStockValue).toLocaleString('th-TH');
 
@@ -5788,6 +5792,34 @@ window.saveProduct = async function() {
   let sku = document.getElementById('pm-sku').value.trim();
   if (!sku) sku = window.getAutoSku(); // fast entry: don't block on a SKU nobody typed in
 
+  // ตรวจความซ้ำก่อนบันทึก: รหัสสินค้า / SKU ขนาด / บาร์โค้ด ต้องไม่ซ้ำกับสินค้าอื่น และชื่อ+ขนาดต้องไม่ซ้ำ
+  // (ป้องกันการเขียนทับกันตอนนำเข้า/ซิงก์ และป้องกันสินค้าที่ขายสับสน)
+  {
+    const normK = s => String(s || '').trim().toLowerCase();
+    const others = Object.values(db.products).filter(x => x.id !== pid);
+    const codesOther = new Set(), skusOther = new Set(), barsOther = new Set(), fullOther = new Map();
+    others.forEach(x => {
+      if (x.code) codesOther.add(normK(x.code));
+      (x.variants || []).forEach(v => {
+        if (v.sku) skusOther.add(normK(v.sku));
+        if (v.barcode) barsOther.add(String(v.barcode).trim());
+        const key = normK(x.name) + '|' + normK(v.sizeName);
+        if (!fullOther.has(key)) fullOther.set(key, x.name + (v.sizeName ? ' ' + v.sizeName : ''));
+      });
+    });
+    const errs = [];
+    if (codesOther.has(normK(sku))) errs.push(`รหัสสินค้า "${sku}" ซ้ำกับสินค้าอื่น — สินค้าแต่ละขนาดต้องมีรหัสของตัวเอง`);
+    const seenSku = new Set(), seenBar = new Set(), seenFull = new Set();
+    pmVariants.forEach(v => {
+      const s = normK(v.sku), b = String(v.barcode || '').trim(), f = normK(name) + '|' + normK(v.sizeName);
+      if (s) { if (seenSku.has(s) || skusOther.has(s)) errs.push(`SKU "${v.sku}" ซ้ำ`); seenSku.add(s); }
+      if (b) { if (seenBar.has(b) || barsOther.has(b)) errs.push(`บาร์โค้ด "${b}" ซ้ำกับสินค้าอื่น`); seenBar.add(b); }
+      if (seenFull.has(f) || fullOther.has(f)) errs.push(`มีสินค้า "${name}${v.sizeName ? ' ' + v.sizeName : ''}" อยู่แล้ว — ใส่ขนาดให้ต่างกันเพื่อไม่ให้สับสน`);
+      seenFull.add(f);
+    });
+    if (errs.length) return window.showAlert?.('ข้อมูลซ้ำ', [...new Set(errs)].slice(0, 5).join('\n'), true);
+  }
+
   const p = id ? db.products[id] : null;
   const pid = id || ('p-' + Date.now());
 
@@ -6232,14 +6264,31 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
   window.exportProductsToExcel = async function(){
     if (!window.ExcelJS) return window.showAlert?.('ผิดพลาด', 'ไม่พบไลบรารี ExcelJS — ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต', true);
 
+    // รหัส SKU ต้องไม่ซ้ำกันทุกแถว: ถ้าสินค้าหลายขนาดใช้รหัสเดียวกัน ให้ต่อท้ายด้วยขนาด เช่น 00080-800
     const rows = [];
+    const entries = [];
     Object.values(db.products || {}).forEach(p => {
       const cats = (p.cat || []).join(', ') || '-';
       const imgUrl = p.imageUrl || '';
       const list = (p.variants || []).length ? p.variants : [{ sizeName: '-', barcode: '', cost: 0, price: 0, stock: 0 }];
-      list.forEach(v => {
-        rows.push({ name: p.name, sku: p.code || p.id, size: v.sizeName || '-', cat: cats, barcode: v.barcode || '-', cost: +(v.cost || 0), price: +(v.price || 0), stock: +(v.stock || 0), imgUrl });
-      });
+      list.forEach(v => entries.push({ p, v, cats, imgUrl, base: String(p.code || p.id), size: v.sizeName || '-' }));
+    });
+    const baseCount = {};
+    entries.forEach(e => { baseCount[e.base] = (baseCount[e.base] || 0) + 1; });
+    const taken = new Set();
+    entries.forEach(e => { if (baseCount[e.base] === 1 && !e.v.sku) taken.add(e.base); });
+    entries.forEach((e, idx) => {
+      let sku;
+      if (e.v.sku && !taken.has(String(e.v.sku))) sku = String(e.v.sku);
+      else if (baseCount[e.base] === 1) sku = e.base;
+      else {
+        const clean = String(e.size).replace(/[^0-9A-Za-z\u0E00-\u0E7F.]/g, '');
+        sku = e.base + '-' + (clean || String(idx + 1));
+      }
+      let uniq = sku, n = 2;
+      while (taken.has(uniq)) uniq = sku + '-' + (n++);
+      taken.add(uniq);
+      rows.push({ name: e.p.name, sku: uniq, size: e.size, cat: e.cats, barcode: e.v.barcode || '-', cost: +(e.v.cost || 0), price: +(e.v.price || 0), stock: +(e.v.stock || 0), imgUrl: e.imgUrl });
     });
     if (!rows.length) return window.showAlert?.('ไม่มีข้อมูล', 'ยังไม่มีสินค้าให้ส่งออก', true);
 
