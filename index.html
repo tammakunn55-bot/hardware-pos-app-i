@@ -6531,6 +6531,10 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
     const el = document.getElementById('health-check-results');
     if (!el) return;
     el.innerHTML = `<p class="text-center text-slate-400 font-bold py-4">🔄 กำลังตรวจสอบ...</p>`;
+    try { await runHealthChecksInner(el); }
+    catch (e) { console.error('health check failed', e); el.innerHTML = `<div class="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-3 text-xs font-bold">❌ ตรวจข้อมูลไม่สำเร็จ: ${esc3(String(e && e.message || e))}</div>`; }
+  };
+  async function runHealthChecksInner(el){
 
     const issues = [];
     const products = Object.values(db.products || {});
@@ -6551,13 +6555,44 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
 
     // 3) บาร์โค้ดซ้ำกันระหว่างสินค้าคนละตัว — สแกนบาร์โค้ดตอนขายจะสุ่มหยิบตัวใดตัวหนึ่งผิดได้
     const barcodeMap = {};
-    products.forEach(p => (p.variants || []).forEach(v => { if (v.barcode) (barcodeMap[v.barcode] ||= []).push(p.name); }));
-    const dupBarcodes = Object.entries(barcodeMap).filter(([, names]) => new Set(names).size > 1);
-    if (dupBarcodes.length) issues.push({ level: 'warn', title: 'บาร์โค้ดซ้ำกันระหว่างสินค้าคนละตัว', count: dupBarcodes.length, detail: dupBarcodes.map(([bc, names]) => `${bc}: ${names.join(' / ')}`).join(' | ') });
+    products.forEach(p => (p.variants || []).forEach(v => { if (v.barcode) (barcodeMap[String(v.barcode).trim()] ||= []).push(`${p.name}${v.sizeName ? ' ' + v.sizeName : ''}`); }));
+    const dupBarcodes = Object.entries(barcodeMap).filter(([, owners]) => owners.length > 1);
+    if (dupBarcodes.length) issues.push({ level: 'error', title: 'บาร์โค้ดซ้ำ (สแกนแล้วระบบอาจเลือกสินค้าผิดตัว)', count: dupBarcodes.length, detail: dupBarcodes.map(([bc, owners]) => `${bc}: ${owners.join(' / ')}`).join('\n') });
+
+    // 3b) รหัสสินค้า (SKU) ซ้ำ และ SKU ของขนาด (variant) ซ้ำ — นำเข้า/ซิงก์จะเขียนทับกัน
+    const codeMap = {}, vskuMap = {};
+    products.forEach(p => {
+      if (p.code) (codeMap[String(p.code).trim().toLowerCase()] ||= []).push(p.name);
+      (p.variants || []).forEach(v => { if (v.sku) (vskuMap[String(v.sku).trim().toLowerCase()] ||= []).push(`${p.name}${v.sizeName ? ' ' + v.sizeName : ''}`); });
+    });
+    const dupCodes = Object.entries(codeMap).filter(([, names]) => names.length > 1);
+    if (dupCodes.length) issues.push({ level: 'error', title: 'รหัสสินค้า (SKU) ซ้ำกันคนละสินค้า — สินค้าหลายขนาดควรมีรหัสแยกกัน', count: dupCodes.length, detail: dupCodes.map(([c, names]) => `${c}: ${names.join(' / ')}`).join('\n') });
+    const dupVSku = Object.entries(vskuMap).filter(([, owners]) => owners.length > 1);
+    if (dupVSku.length) issues.push({ level: 'error', title: 'SKU ของขนาดซ้ำกัน', count: dupVSku.length, detail: dupVSku.map(([c, owners]) => `${c}: ${owners.join(' / ')}`).join('\n') });
+
+    // 3c) ชื่อ + ขนาดเหมือนกันในสินค้าคนละตัว (ขายแล้วสับสน)
+    const fullMap = {};
+    products.forEach(p => (p.variants || []).forEach(v => { const k = `${String(p.name).trim().toLowerCase()}|${String(v.sizeName || '').trim().toLowerCase()}`; (fullMap[k] ||= []).push(p.id); }));
+    const dupFull = Object.entries(fullMap).filter(([, ids]) => new Set(ids).size > 1);
+    if (dupFull.length) issues.push({ level: 'warn', title: 'ชื่อและขนาดเหมือนกันในสินค้าคนละตัว', count: dupFull.length, detail: dupFull.map(([k]) => k.replace('|', ' ')).join(', ') });
 
     // 4) สินค้าที่ไม่มีตัวเลือก/ไซซ์เลย — ขายหน้าร้านไม่ได้เพราะไม่มี variant ให้กดเลือก
     const noVariant = products.filter(p => !(p.variants || []).length);
     if (noVariant.length) issues.push({ level: 'warn', title: 'สินค้าที่ไม่มีตัวเลือก/ไซซ์เลย (ขายไม่ได้)', count: noVariant.length, detail: noVariant.map(p => p.name).join(', ') });
+
+    // 4b) ขนาดที่ราคาขายเป็น 0 (ขายได้แต่ไม่มีราคา) และขนาดที่ไม่มีราคาทุน (กำไรจะคำนวณเกินจริง)
+    const zeroPrice = [], noCost = [];
+    products.forEach(p => (p.variants || []).forEach(v => {
+      const label = `${p.name}${v.sizeName ? ' ' + v.sizeName : ''}`;
+      if (!(+v.price > 0)) zeroPrice.push(label);
+      else if (!(+v.cost > 0)) noCost.push(label);
+    }));
+    if (zeroPrice.length) issues.push({ level: 'warn', title: 'ขนาดที่ราคาขายเป็น 0 บาท', count: zeroPrice.length, detail: zeroPrice.slice(0, 50).join(', ') });
+    if (noCost.length) issues.push({ level: 'info', title: 'ขนาดที่ยังไม่มีราคาทุน (กำไรในรายงานจะเกินจริง)', count: noCost.length, detail: noCost.slice(0, 50).join(', ') });
+
+    // 4c) รายการรอส่งขึ้นเซิร์ฟเวอร์ที่ค้างอยู่
+    const pendingSync = (db.syncQueue || []).length;
+    if (pendingSync) issues.push({ level: 'warn', title: 'รายการที่ยังไม่ได้ส่งขึ้นเซิร์ฟเวอร์ (รอเน็ต/รอซิงก์)', count: pendingSync, detail: 'ข้อมูลยังอยู่ในเครื่องนี้ เมื่อเน็ตกลับมาระบบจะส่งให้เอง ห้ามล้างข้อมูลเบราว์เซอร์ก่อนส่งเสร็จ' });
 
     // 5) บิลที่มียอดเงินแต่ไม่มีรายการสินค้า — ร่องรอยข้อมูลเพี้ยน/เขียนไม่สมบูรณ์ตอน sync หรือ persist ล้มเหลว
     const emptyBills = (db.bills || []).filter(b => (!b.items || !b.items.length) && (+b.total || 0) > 0);
@@ -6570,6 +6605,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
 
     // 7) รูปภาพบน Supabase Storage เทียบกับสินค้าที่ใช้งานจริง (ต้องเชื่อมต่อ Supabase ไว้ก่อน)
     const client = window.getSupabaseClient?.();
+    if (!client) issues.push({ level: 'info', title: 'ยังไม่ได้เชื่อมต่อ Supabase — ข้ามการตรวจรูปบนเซิร์ฟเวอร์', count: 0, detail: 'เชื่อมต่อในตั้งค่าแล้วกดตรวจใหม่เพื่อเทียบรูปกับ Storage' });
     if (client) {
       try {
         // BUG FIX: .list() คืนมาสูงสุดตาม limit ต่อครั้งเท่านั้น (limit:1000 เดิม) — ร้านที่มีรูป
@@ -6616,9 +6652,10 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
       }
     }
 
-    el.innerHTML = issues.length
+    const summary = `<div class="text-[10px] text-slate-500 font-bold mb-1">ตรวจแล้ว ${products.length} สินค้า • ${products.reduce((n, p) => n + (p.variants || []).length, 0)} ขนาด/หน่วย • ${(db.bills || []).length} บิล • ${issues.length} หัวข้อที่พบ</div>`;
+    el.innerHTML = summary + (issues.length
       ? issues.map(i => i.type === 'orphan-images' ? orphanImageCard(i.title, i.files) : issueCard(i.level, i.title, i.count, i.detail, i.fixAction)).join('')
-      : `<div class="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-4 text-center text-xs font-bold">✅ ไม่พบความผิดปกติ ข้อมูลดูปกติดี</div>`;
+      : `<div class="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-4 text-center text-xs font-bold">✅ ไม่พบความผิดปกติ ข้อมูลดูปกติดี</div>`);
   };
 })();
 </script>
