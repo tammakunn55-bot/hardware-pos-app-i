@@ -2353,7 +2353,7 @@ window.formatMoney = formatMoney;
             name: p.name,
             image_url: p.imageUrl || null,
             min_stock_alert: roundStock((p.variants && p.variants[0] && p.variants[0].minStock) || 5),
-            is_active: !p.isDeleted
+            is_active: !p.isDeleted && !p.isDisabled
           }));
           if (productRows.length > 0) {
             const { error: prodErr } = await client.from('products').upsert(productRows, { onConflict: 'id' });
@@ -2424,7 +2424,7 @@ window.formatMoney = formatMoney;
                 cost_price: roundAmt(v.cost),
                 // (v10) ไม่ส่ง stock_quantity ในการ upsert อีกแล้ว — เดิมเครื่องไหนซิงค์ทีหลังจะเขียนทับสต็อกของเครื่องอื่น
                 // สต็อกเปลี่ยนผ่าน RPC เท่านั้น (create_sale / process_return / receive_goods / adjust_stock / seed)
-                is_active: !p.isDeleted
+                is_active: !p.isDeleted && !p.isDisabled
               });
             });
           });
@@ -2656,7 +2656,7 @@ window.formatMoney = formatMoney;
           const res2 = await window.syncTransactionsToSupabase(true);
           const qres = await window.flushSyncQueue(true);
 
-          if (!res1) { await window.syncProductsToSupabase(false); throw new Error('ซิงค์สินค้า/หมวดหมู่/ลูกค้าไม่สำเร็จ'); }
+          if (!res1) { window.smartPOSActivityLog?.add('ERROR','ซิงก์สินค้า/หมวดหมู่/ลูกค้าไม่สำเร็จ','เซิร์ฟเวอร์ไม่รับข้อมูลชุดนี้'); await window.syncProductsToSupabase(false); throw new Error('ซิงค์สินค้า/หมวดหมู่/ลูกค้าไม่สำเร็จ'); }
           if (!res2) { await window.syncTransactionsToSupabase(false); throw new Error('ซิงค์บิล/กะ/รายรับ-จ่ายไม่สำเร็จ'); }
 
           if (qres && qres.failed > 0) {
@@ -2665,6 +2665,7 @@ window.formatMoney = formatMoney;
           }
           if (qres && qres.pending > 0) { window.updateSupabaseBadge(false); return window.showAlert('ยังมีรายการรอส่ง', `เหลือ ${qres.pending} รายการ (อาจออฟไลน์) — จะลองส่งใหม่อัตโนมัติ`, true); }
           window.updateSupabaseBadge(true);
+          window.smartPOSActivityLog?.add('OK','ซิงก์ข้อมูลกับ Supabase สำเร็จทั้งหมด','สินค้า ลูกค้า บิล กะ ส่งครบ');
           window.showToast("ซิงค์ข้อมูลกับ Supabase SQL สำเร็จแล้ว!");
         } catch (err) {
           console.error("Force sync failed:", err);
@@ -3120,8 +3121,8 @@ window.formatMoney = formatMoney;
           : (catName === null ? null : [catName]);
 
         const products = namesToMatch === null
-          ? Object.values(db.products).sort((a, b) => naturalCompare(a.name, b.name))
-          : Object.values(db.products).filter(p => (p.cat || []).some(pc => namesToMatch.includes(pc))).sort((a, b) => naturalCompare(a.name, b.name));
+          ? Object.values(db.products).filter(p => !p.isDisabled).sort((a, b) => naturalCompare(a.name, b.name))
+          : Object.values(db.products).filter(p => !p.isDisabled && (p.cat || []).some(pc => namesToMatch.includes(pc))).sort((a, b) => naturalCompare(a.name, b.name));
         window.renderProductGridResults(products, catName === null ? '🏷️ สินค้าทั้งหมด' : catName);
       };
 
@@ -3135,6 +3136,7 @@ window.formatMoney = formatMoney;
         const q = (e.target.value || '').trim().toLowerCase();
         if (!q) { window.selectCategory(currentCategoryFilter); return; }
         let results = Object.values(db.products).filter(p => {
+          if (p.isDisabled) return false;
           if ((p.name || '').toLowerCase().includes(q)) return true;
           if ((p.code || '').toLowerCase().includes(q)) return true;
           return (p.variants || []).some(v => (v.barcode || '').toLowerCase().includes(q));
@@ -4350,127 +4352,222 @@ window.formatMoney = formatMoney;
         return new Set(db.categories.map(c => c.name));
       };
 
-      window.handleOpeningStockFile = function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-          try {
-            const wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
-            const sheetName = wb.SheetNames.includes('รายการสินค้า') ? 'รายการสินค้า' : wb.SheetNames[0];
-            const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
-            const num = v => { const n = parseFloat(String(v).replace(/,/g, '')); return isFinite(n) ? n : 0; };
-            const txt = v => String(v == null ? '' : v).normalize('NFC').trim();
-            const pick = (r, ...keys) => { for (const k of keys) { if (r[k] !== undefined && r[k] !== '') return r[k]; } return ''; };
-            const groups = new Map();
-            const seenSku = new Set(), seenBar = new Set();
-            const warn = { zeroPrice: [], noCost: 0, dupSku: 0, dupBar: 0, noImage: 0 };
-
-            rows.forEach((r, idx) => {
-              const name = txt(pick(r, 'ชื่อสินค้า', 'ชื่อ', 'Name'));
-              if (!name) return;
-              let sku = txt(pick(r, 'SKU', 'รหัสสินค้า', 'รหัส', 'Code')) || ('IMP-' + (idx + 2));
-              if (seenSku.has(sku)) { warn.dupSku++; sku = sku + '-DUP' + (idx + 2); }
-              seenSku.add(sku);
-              let barcode = txt(pick(r, 'บาร์โค้ด', 'Barcode')) || sku;
-              if (seenBar.has(barcode)) { warn.dupBar++; barcode = sku; }
-              if (seenBar.has(barcode)) barcode = sku + '-' + (idx + 2);
-              seenBar.add(barcode);
-              const cost = num(pick(r, 'ราคาทุน', 'ทุน', 'Cost'));
-              const price = num(pick(r, 'ราคาขาย', 'ราคา', 'Price'));
-              const image = txt(pick(r, 'ไฟล์รูปภาพ'));
-              if (price <= 0) warn.zeroPrice.push(`${name} (${sku})`);
-              if (cost <= 0) warn.noCost++;
-              if (!image) warn.noImage++;
-              let g = groups.get(name);
-              if (!g) {
-                g = { name, category: txt(pick(r, 'หมวดหมู่', 'Category')), code: txt(pick(r, 'รหัสสินค้าหลัก')) || sku, variants: [] };
-                groups.set(name, g);
-              }
-              g.variants.push({
-                id: 'v_imp_' + sku.replace(/\s+/g, '_'), sku, barcode,
-                sizeName: txt(pick(r, 'ขนาด', 'ไซส์', 'Size')) || 'ปกติ',
-                cost, price, stock: Math.max(0, num(pick(r, 'ยอดยกมา', 'คงเหลือ', 'Stock')))
-              });
-            });
-
-            const usedCodes = new Set();
-            pendingImportList = Array.from(groups.values()).map(g => {
-              let code = g.code, n = 1;
-              while (usedCodes.has(code)) code = g.code + '-G' + (++n);
-              usedCodes.add(code); g.code = code;
-              g.exists = !!Object.values(db.products).find(p => p.code === code);
-              return g;
-            });
-            if (!pendingImportList.length) return window.showAlert?.('ไม่พบข้อมูล', 'ไม่พบแถวสินค้าในไฟล์ (ต้องมีคอลัมน์ "ชื่อสินค้า")', true);
-
-            const nVar = pendingImportList.reduce((a, g) => a + g.variants.length, 0);
-            const nExist = pendingImportList.filter(g => g.exists).length;
-            document.getElementById('import-preview-box').classList.remove('hidden');
-            document.getElementById('import-preview-table').innerHTML = `
-              <div class="p-3 text-xs bg-indigo-50 border-b leading-relaxed">
-                <b>${pendingImportList.length}</b> สินค้า (<b>${nVar}</b> ขนาด/รายการ) • ใหม่ <b>${pendingImportList.length - nExist}</b> • อัปเดตของเดิม <b>${nExist}</b><br>
-                ${warn.zeroPrice.length ? `<span class="text-rose-600 font-bold">⚠️ ราคาขาย 0 บาท ${warn.zeroPrice.length} รายการ</span> • ` : ''}
-                ${warn.noCost ? `<span class="text-amber-600 font-bold">ไม่มีราคาทุน ${warn.noCost} รายการ (กำไรจะคำนวณไม่ได้)</span> • ` : ''}
-                ${warn.dupSku ? `รหัสซ้ำที่แก้อัตโนมัติ ${warn.dupSku} • ` : ''}${warn.dupBar ? `บาร์โค้ดซ้ำ ${warn.dupBar} • ` : ''}ไม่มีรูป ${warn.noImage}
-              </div>
-              <table class="w-full text-left text-xs">
-                <thead class="bg-slate-100 font-bold"><tr><th class="p-2">ชื่อ</th><th class="p-2">หมวดหมู่</th><th class="p-2">ขนาด</th><th class="p-2">ราคาขาย</th><th class="p-2"></th></tr></thead>
-                <tbody class="divide-y">${pendingImportList.slice(0, 150).map(g => {
-                  const ps = g.variants.map(v => v.price).filter(x => x > 0);
-                  const lo = ps.length ? Math.min(...ps) : 0, hi = ps.length ? Math.max(...ps) : 0;
-                  return `<tr><td class="p-2">${escapeHTML(g.name)}</td><td class="p-2">${escapeHTML(g.category || 'อื่นๆ')}</td><td class="p-2">${g.variants.length}</td><td class="p-2">${lo === hi ? formatMoney(lo) : formatMoney(lo) + ' – ' + formatMoney(hi)}</td><td class="p-2 text-[10px] font-bold ${g.exists ? 'text-amber-600' : 'text-emerald-600'}">${g.exists ? 'อัปเดต' : 'ใหม่'}</td></tr>`;
-                }).join('')}${pendingImportList.length > 150 ? `<tr><td class="p-2 text-slate-400" colspan="5">… และอีก ${pendingImportList.length - 150} รายการ</td></tr>` : ''}</tbody>
-              </table>`;
-            if (warn.zeroPrice.length) window.showAlert?.('พบสินค้าราคาขาย 0 บาท', warn.zeroPrice.slice(0, 15).join('\n') + (warn.zeroPrice.length > 15 ? `\n… และอีก ${warn.zeroPrice.length - 15} รายการ` : '') + '\n\nแก้ราคาก่อน/หลังนำเข้าได้ — ระบบจะยังนำเข้ารายการเหล่านี้', true);
-          } catch (err) {
-            console.error(err);
-            window.showAlert?.('อ่านไฟล์ไม่สำเร็จ', err.message || String(err), true);
+      // ---------- นำเข้ารายการสินค้า: ใช้โครงสร้างเดียวกับไฟล์ส่งออก นำเข้าเฉพาะแถวที่ผ่านการตรวจ ----------
+      function buildImportPlan(rows){
+        const num = v => { const s = String(v == null ? '' : v).replace(/,/g, '').trim(); if (s === '') return NaN; const n = parseFloat(s); return isFinite(n) ? n : NaN; };
+        const txt = v => String(v == null ? '' : v).normalize('NFC').trim();
+        const pick = (r, ...ks) => { for (const k of ks) { if (r[k] !== undefined && r[k] !== '') return r[k]; } return ''; };
+        const existingSku = new Map(), existingBar = new Map();
+        Object.values(db.products || {}).forEach(p => { if (p.isDeleted) return; (p.variants || []).forEach(v => {
+          if (v.sku) existingSku.set(String(v.sku).toLowerCase(), p.name);
+          if (v.barcode) existingBar.set(String(v.barcode), p.name); }); });
+        const fileSku = new Map(), fileBar = new Map(), rejected = [], mains = [], subs = [];
+        const reject = (line, reason, name) => rejected.push({ line, reason, name: name || '' });
+        rows.forEach((r, idx) => {
+          const line = idx + 2;
+          const row = {
+            line, type: txt(pick(r, 'ประเภทแถว')) || 'หลัก', name: txt(pick(r, 'ชื่อสินค้า', 'ชื่อ', 'Name')),
+            sku: txt(pick(r, 'รหัสสินค้า (SKU)', 'รหัสสินค้า', 'SKU', 'รหัส', 'Code')), bar: txt(pick(r, 'รหัสบาร์โค้ด', 'บาร์โค้ด', 'Barcode')),
+            size: txt(pick(r, 'ขนาด/รุ่น', 'ขนาด', 'ไซส์', 'Size')) || 'ปกติ', unit: txt(pick(r, 'หน่วย')),
+            cost: num(pick(r, 'ราคาทุน', 'ทุน', 'Cost')), price: num(pick(r, 'ราคาขาย', 'ราคา', 'Price')),
+            group: txt(pick(r, 'กลุ่มสินค้า', 'กลุ่ม')), main: txt(pick(r, 'หมวดหมู่หลัก', 'หมวดหมู่', 'Category')), sub: txt(pick(r, 'หมวดหมู่ย่อย')),
+            parent: txt(pick(r, 'รหัสสินค้าหลัก')), ratio: num(pick(r, 'จำนวนหน่วยย่อยต่อ 1 หน่วยหลัก', 'ตัวคูณ')),
+            stock: num(pick(r, 'จำนวนคงเหลือ', 'จำนวน', 'ยอดยกมา', 'Stock')), min: num(pick(r, 'ขั้นต่ำ', 'MinStock')),
+            status: txt(pick(r, 'สถานะ')) || 'ใช้', image: txt(pick(r, 'รูปสินค้า', 'ไฟล์รูปภาพ')), img: r.__img || null
+          };
+          if (!row.name && !row.sku && !row.price && !row.unit) return;          // แถวว่าง
+          if (row.type !== 'หลัก' && row.type !== 'หน่วยย่อย') return reject(line, 'ประเภทแถวต้องเป็น "หลัก" หรือ "หน่วยย่อย"', row.name);
+          if (!row.sku) return reject(line, 'ไม่มีรหัสสินค้า (SKU)', row.name);
+          if (!['ใช้', 'ไม่ใช้'].includes(row.status)) return reject(line, 'สถานะต้องเป็น "ใช้" หรือ "ไม่ใช้"', row.name);
+          const skuKey = row.sku.toLowerCase();
+          if (fileSku.has(skuKey)) return reject(line, `SKU ซ้ำกับแถว ${fileSku.get(skuKey)}`, row.name);
+          fileSku.set(skuKey, line);
+          if (row.type === 'หลัก') {
+            if (!row.name) return reject(line, 'ไม่มีชื่อสินค้า', row.name);
+            if (!row.main) return reject(line, 'ไม่มีหมวดหมู่หลัก', row.name);
+            if (!(row.price > 0)) return reject(line, 'ราคาขายต้องมากกว่า 0', row.name);
+            if (row.cost < 0) return reject(line, 'ราคาทุนติดลบ', row.name);
+            if (row.stock < 0) return reject(line, 'จำนวนคงเหลือติดลบ', row.name);
+            if (existingSku.has(skuKey) && existingSku.get(skuKey) !== (row.group || row.name)) return reject(line, `SKU นี้ถูกใช้กับสินค้า "${existingSku.get(skuKey)}" อยู่แล้ว`, row.name);
+          } else {
+            if (!row.parent) return reject(line, 'หน่วยย่อยต้องระบุรหัสสินค้าหลัก', row.name);
+            if (!row.unit) return reject(line, 'หน่วยย่อยไม่มีชื่อหน่วย', row.name);
+            if (!(row.price > 0)) return reject(line, 'ราคาหน่วยย่อยต้องมากกว่า 0', row.name);
+            if (!(row.ratio > 0)) return reject(line, 'จำนวนหน่วยย่อยต่อ 1 หน่วยหลักต้องมากกว่า 0', row.name);
           }
-        };
-        reader.readAsArrayBuffer(file);
+          if (row.bar) {
+            if (!/^\d{8,14}$/.test(row.bar)) return reject(line, 'รหัสบาร์โค้ดต้องเป็นตัวเลข 8–14 หลัก', row.name);
+            const bk = row.bar;
+            if (fileBar.has(bk)) return reject(line, `บาร์โค้ดซ้ำกับแถว ${fileBar.get(bk)}`, row.name);
+            if (existingBar.has(bk) && existingBar.get(bk) !== (row.group || row.name)) return reject(line, `บาร์โค้ดนี้ถูกใช้กับสินค้า "${existingBar.get(bk)}" อยู่แล้ว`, row.name);
+            fileBar.set(bk, line);
+          }
+          if (row.type === 'หลัก') mains.push(row); else subs.push(row);
+        });
+        // กลุ่มเดียวกันต้องมีหมวด/สถานะเดียวกัน
+        const gKey = r => r.group || r.name;
+        const gInfo = new Map();
+        mains.forEach(r => { const k = gKey(r); if (!gInfo.has(k)) gInfo.set(k, { main: r.main, sub: r.sub, status: r.status, image: r.image, min: r.min, img: null }); if (r.img && !gInfo.get(k).img) gInfo.get(k).img = r.img; });
+        const okMains = mains.filter(r => {
+          const g = gInfo.get(gKey(r));
+          if (g.main !== r.main || g.sub !== r.sub) { reject(r.line, 'หมวดหมู่ไม่ตรงกับแถวอื่นในกลุ่มเดียวกัน', r.name); return false; }
+          if (g.status !== r.status) { reject(r.line, 'สถานะไม่ตรงกับแถวอื่นในกลุ่มเดียวกัน', r.name); return false; }
+          return true;
+        });
+        const okSkus = new Map(okMains.map(r => [r.sku.toLowerCase(), r]));
+        const okSubs = subs.filter(r => {
+          const parent = okSkus.get(r.parent.toLowerCase());
+          if (!parent) { reject(r.line, `รหัสสินค้าหลัก "${r.parent}" ไม่ผ่านการตรวจหรือไม่มีในไฟล์`, r.name); return false; }
+          r.parentRow = parent; return true;
+        });
+        // จัดกลุ่มเป็นสินค้า
+        const groups = new Map();
+        okMains.forEach(r => {
+          const k = gKey(r);
+          if (!groups.has(k)) { const g = gInfo.get(k); groups.set(k, { name: k, code: r.sku, main: g.main, sub: g.sub, status: g.status, image: g.image, img: g.img, minStock: isFinite(g.min) && g.min >= 0 ? g.min : 5, variants: [] }); }
+          const g = groups.get(k);
+          g.variants.push({ sku: r.sku, barcode: r.bar, sizeName: r.size, cost: isFinite(r.cost) ? r.cost : 0, price: r.price, stock: isFinite(r.stock) ? r.stock : 0, minStock: isFinite(r.min) ? r.min : g.minStock, fractions: [], line: r.line });
+        });
+        okSubs.forEach(r => {
+          const g = groups.get(gKey(r.parentRow)); const v = g.variants.find(x => x.sku.toLowerCase() === r.parent.toLowerCase());
+          v.fractions.push({ id: 'f-' + r.sku.replace(/\s+/g, '_'), sku: r.sku, barcode: r.bar, fractionName: r.unit, fractionMultiplier: Math.round(1 / r.ratio * 1000) / 1000, fractionPrice: r.price });
+        });
+        const list = [...groups.values()];
+        const nVar = list.reduce((a, g) => a + g.variants.length, 0), nFrac = okSubs.length, nPhoto = list.filter(g => g.img).length;
+        return { groups: list, rejected: rejected.sort((a, b) => a.line - b.line), stats: { groups: list.length, variants: nVar, fractions: nFrac, photos: nPhoto, rejected: rejected.length, total: rows.length } };
+      }
+
+      function renderImportPreview(plan){
+        const box = document.getElementById('import-preview-box'), el = document.getElementById('import-preview-table');
+        box.classList.remove('hidden');
+        const s = plan.stats;
+        const rej = plan.rejected.slice(0, 200).map(x => `<tr class="border-t"><td class="p-2">${x.line}</td><td class="p-2">${escapeHTML(x.name)}</td><td class="p-2 text-rose-700">${escapeHTML(x.reason)}</td></tr>`).join('');
+        el.innerHTML = `
+          <div class="p-3 text-xs bg-indigo-50 border-b leading-relaxed">
+            ผ่านการตรวจ <b class="text-emerald-700">${s.variants + s.fractions}</b> แถว (สินค้า <b>${s.groups}</b> กลุ่ม • ขนาด <b>${s.variants}</b> • หน่วยย่อย <b>${s.fractions}</b> • มีรูป <b>${s.photos}</b> กลุ่ม)<br>
+            ไม่ผ่าน <b class="text-rose-700">${s.rejected}</b> แถว จากทั้งหมด ${s.total} แถว — แถวที่ไม่ผ่านจะถูกข้าม ไม่นำเข้า
+          </div>
+          ${plan.rejected.length ? `<div class="max-h-48 overflow-y-auto"><table class="w-full text-left text-xs"><thead class="bg-rose-50 font-bold"><tr><th class="p-2">แถว</th><th class="p-2">ชื่อ</th><th class="p-2">เหตุผล</th></tr></thead><tbody>${rej}</tbody></table></div>` : '<div class="p-3 text-xs text-emerald-700">✅ ทุกแถวผ่านการตรวจ</div>'}`;
+        const confirmBtn = document.querySelector('[onclick*="confirmOpeningStockImport"]');
+        if (confirmBtn) confirmBtn.disabled = !plan.groups.length;
+      }
+
+      // อ่านไฟล์ด้วย ExcelJS: ได้ทั้งข้อมูลแถวและรูปที่ฝังในไฟล์ (รูปผูกกับแถวที่อยู่ในคอลัมน์ "รูปสินค้า")
+      const cellText = v => {
+        if (v == null) return '';
+        if (v instanceof Date) return v.toISOString();
+        if (typeof v === 'object') {
+          if (v.richText) return v.richText.map(x => x.text).join('');
+          if (v.result !== undefined) return cellText(v.result);
+          if (v.text !== undefined) return String(v.text);
+          return '';
+        }
+        return String(v);
+      };
+      window.handleOpeningStockFile = async function(e){
+        const file = e.target.files[0];
         e.target.value = '';
+        if (!file) return;
+        try {
+          if (!window.ExcelJS) throw new Error('ไม่พบไลบรารี ExcelJS — ตรวจการเชื่อมต่ออินเทอร์เน็ต');
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(await file.arrayBuffer());
+          const ws = wb.getWorksheet('รายการสินค้า') || wb.worksheets[0];
+          const headers = [];
+          ws.getRow(1).eachCell((c, col) => { headers[col - 1] = cellText(c.value).trim(); });
+          const imgByRow = new Map();
+          ws.getImages().forEach(im => {
+            const img = wb.getImage(im.imageId);
+            if (img && img.buffer) imgByRow.set(im.range.tl.nativeRow + 1, { buffer: img.buffer, ext: (img.extension || 'jpeg').toLowerCase() });
+          });
+          const rows = [];
+          ws.eachRow((row, rn) => {
+            if (rn === 1) return;
+            const o = {};
+            headers.forEach((h, i) => { if (h) o[h] = cellText(row.getCell(i + 1).value); });
+            o.__img = imgByRow.get(rn) || null;
+            rows.push(o);
+          });
+          const plan = buildImportPlan(rows);
+          if (!plan.groups.length && !plan.rejected.length) return window.showAlert?.('ไม่พบข้อมูล', 'ไม่พบแถวสินค้าในไฟล์', true);
+          pendingImportList = plan.groups;
+          renderImportPreview(plan);
+        } catch (err) {
+          console.error(err);
+          window.showAlert?.('อ่านไฟล์ไม่สำเร็จ', err.message || String(err), true);
+        }
       };
 
-      window.confirmOpeningStockImport = function() {
+      // อัปโหลดรูปที่ฝังในไฟล์ขึ้น Storage (bucket product-images) แล้วผูกกับสินค้า — ล้มเหลวได้โดยไม่กระทบข้อมูลสินค้า
+      async function uploadImportPhotos(groups){
+        const client = window.getSupabaseClient?.();
+        const out = { ok: 0, fail: 0, skipped: 0, noClient: !client };
+        for (const g of groups) {
+          if (!g.img) continue;
+          if (!client) { out.skipped++; continue; }
+          try {
+            const ext = g.img.ext === 'png' ? 'png' : 'jpg';
+            const path = `${g.pid}_${Date.now()}.${ext}`;
+            const blob = new Blob([g.img.buffer], { type: ext === 'png' ? 'image/png' : 'image/jpeg' });
+            const { error } = await client.storage.from('product-images').upload(path, blob, { contentType: blob.type, upsert: true });
+            if (error) throw error;
+            const { data } = client.storage.from('product-images').getPublicUrl(path);
+            const p = db.products[g.pid]; if (p) p.imageUrl = data.publicUrl;
+            out.ok++;
+          } catch (err) { console.warn('photo upload failed', g.name, err); out.fail++; }
+        }
+        return out;
+      }
+
+      window.confirmOpeningStockImport = async function(){
         if (!pendingImportList.length) return;
-        window.seedYojiCategories();
+
         db.categories = db.categories || [];
-        const catNames = new Set(db.categories.map(c => c.name));
-        let added = 0, updated = 0;
+        const ensureCat = (name, parentId) => {
+          let c = db.categories.find(x => x.name === name && (x.parentId || null) === (parentId || null));
+          if (!c) { c = { id: 'cat-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, icon: '📦', color: '#64748b', parentId: parentId || null }; db.categories.push(c); }
+          return c;
+        };
+        let added = 0, updated = 0, fracs = 0;
         pendingImportList.forEach(g => {
-          const cat = (g.category && g.category !== 'ไม่ระบุหมวด') ? g.category : 'อื่นๆ';
-          if (!catNames.has(cat)) {   // หมวดจากไฟล์ที่ยังไม่มีในระบบ — สร้างให้ตามชื่อในไฟล์ (เดิมตกไป "อื่นๆ" ถ้าไม่อยู่ในตารางแม็ป)
-            db.categories.push({ id: 'cat-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: cat, icon: '📦', color: '#64748b' });
-            catNames.add(cat);
-          }
-          const existing = Object.values(db.products).find(p => p.code === g.code && !p.isDeleted);
-          const mk = nv => ({ id: nv.id, sizeName: nv.sizeName, sku: nv.sku, barcode: nv.barcode, cost: nv.cost, price: nv.price, stock: nv.stock, fractions: [] });
+          const top = ensureCat(g.main);
+          const cat = g.sub ? ensureCat(g.sub, top.id) : top;
+          const catName = cat.name;
+          const existing = Object.values(db.products).find(p => !p.isDeleted && p.name === g.name);
+          g.pid = existing ? existing.id : null;
+          const mk = nv => ({ id: 'v-' + nv.sku.replace(/\s+/g, '_'), sizeName: nv.sizeName, sku: nv.sku, barcode: nv.barcode, cost: nv.cost, price: nv.price, stock: nv.stock, minStock: nv.minStock, fractions: nv.fractions.map(f => ({ id: f.id, fractionName: f.fractionName, fractionMultiplier: f.fractionMultiplier, fractionPrice: f.fractionPrice, sku: f.sku, barcode: f.barcode })) });
           if (existing) {
-            existing.name = g.name; existing.cat = [cat];
+            existing.cat = [catName]; existing.isDisabled = g.status === 'ไม่ใช้';
             existing.variants = existing.variants || [];
             g.variants.forEach(nv => {
               const lv = existing.variants.find(v => (nv.sku && v.sku === nv.sku) || (nv.barcode && v.barcode === nv.barcode));
-              if (lv) {   // อัปเดตราคา/ทุนที่มีค่าเท่านั้น และ "ไม่แตะสต็อกเดิม" (นำเข้าซ้ำจะไม่ล้างยอดคงเหลือ)
+              if (lv) {       // อัปเดตราคา ทุน หน่วยย่อย แต่ไม่แตะยอดคงเหลือเดิม
                 if (nv.price > 0) lv.price = nv.price;
                 if (nv.cost > 0) lv.cost = nv.cost;
                 if (!lv.sku) lv.sku = nv.sku;
+                if (nv.barcode && !lv.barcode) lv.barcode = nv.barcode;
+                if (nv.fractions.length) lv.fractions = mk(nv).fractions;
               } else existing.variants.push(mk(nv));
             });
             updated++;
           } else {
-            const pid = 'imp-' + g.code.replace(/\s+/g, '_');
-            db.products[pid] = { id: pid, name: g.name, code: g.code, cat: [cat], image: '📦', imageUrl: null, minStock: 5, variants: g.variants.map(mk) };
+            let pid = 'imp-' + g.code.replace(/\s+/g, '_'), n = 2;
+            while (db.products[pid]) pid = 'imp-' + g.code.replace(/\s+/g, '_') + '-' + (n++);
+            db.products[pid] = { id: pid, name: g.name, code: g.code, cat: [catName], image: '📦', imageUrl: null, imageFile: g.image || '', minStock: g.minStock, isDisabled: g.status === 'ไม่ใช้', variants: g.variants.map(mk) };
+            g.pid = pid;
             added++;
           }
+          fracs += g.variants.reduce((a, v) => a + v.fractions.length, 0);
         });
         window.persist?.();
-        window.renderCategoryManagerList?.();
-        window.renderCategoryParentOptions?.();
-        window.renderStockTable?.();
-        window.renderSaleHome?.();
-        window.populatePOPickers?.();
-        window.showToast?.(`นำเข้าสินค้าใหม่ ${added} • อัปเดต ${updated} รายการเรียบร้อย — ถัดไปให้นำเข้ารูปภาพ แล้วกดซิงค์`);
+        window.showToast?.('กำลังอัปโหลดรูปจากไฟล์…');
+        const ph = await uploadImportPhotos(pendingImportList);
+        window.persist?.();
+        window.renderCategoryManagerList?.(); window.renderCategoryParentOptions?.();
+        window.renderStockTable?.(); window.renderSaleHome?.(); window.populatePOPickers?.();
+        const photoMsg = ph.noClient ? 'ยังไม่ได้เชื่อม Supabase — ไม่ได้อัปโหลดรูป' : `รูป ${ph.ok} สำเร็จ${ph.fail ? ` • ล้มเหลว ${ph.fail}` : ''}`;
+        window.showToast?.(`นำเข้าสินค้าใหม่ ${added} • อัปเดต ${updated} กลุ่ม • หน่วยย่อย ${fracs} • ${photoMsg}`);
+        window.smartPOSActivityLog?.add('OK', 'นำเข้ารายการสินค้าจากไฟล์', `ใหม่ ${added} • อัปเดต ${updated} • หน่วยย่อย ${fracs}`);
         window.syncProductsToSupabase?.(true);
         pendingImportList = [];
         document.getElementById('import-preview-box').classList.add('hidden');
@@ -6263,102 +6360,108 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
   // (xlsx.full.min.js) ไม่รองรับการฝังรูปภาพจริงลงในไฟล์ .xlsx ได้ (รองรับแค่ข้อความ/สูตร/ลิงก์)
   // — ExcelJS รองรับ addImage() ทำให้เห็นรูปจริงในตารางเพื่อตรวจสอบเบื้องต้นได้ทันทีโดยไม่ต้อง
   // คลิกลิงก์ทีละแถว ส่วนคอลัมน์ "ลิงก์รูปภาพ" ยังคงเป็น hyperlink ที่คลิกได้เหมือนเดิมด้วย
+  // ---------- ส่งออกรายการสินค้า: 1 แถว = 1 ขนาด หรือ 1 หน่วยย่อย (ตามที่ตกลง) ----------
+  window.PRODUCT_SHEET_COLUMNS = ['ลำดับ','หมวดหมู่หลัก','หมวดหมู่ย่อย','รูปสินค้า','รหัสสินค้า (SKU)','รหัสบาร์โค้ด','ชื่อสินค้า','ขนาด/รุ่น','หน่วย','ราคาทุน','ราคาขาย','กลุ่มสินค้า','ประเภทแถว','รหัสสินค้าหลัก','จำนวนหน่วยย่อยต่อ 1 หน่วยหลัก','จำนวนคงเหลือ','ขั้นต่ำ','สถานะ'];
   window.exportProductsToExcel = async function(){
     if (!window.ExcelJS) return window.showAlert?.('ผิดพลาด', 'ไม่พบไลบรารี ExcelJS — ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต', true);
-
-    // รหัส SKU ต้องไม่ซ้ำกันทุกแถว: ถ้าสินค้าหลายขนาดใช้รหัสเดียวกัน ให้ต่อท้ายด้วยขนาด เช่น 00080-800
-    const rows = [];
-    const entries = [];
-    Object.values(db.products || {}).forEach(p => {
-      const cats = (p.cat || []).join(', ') || '-';
-      const imgUrl = p.imageUrl || '';
-      const list = (p.variants || []).length ? p.variants : [{ sizeName: '-', barcode: '', cost: 0, price: 0, stock: 0 }];
-      list.forEach(v => entries.push({ p, v, cats, imgUrl, base: String(p.code || p.id), size: v.sizeName || '-' }));
-    });
-    const baseCount = {};
-    entries.forEach(e => { baseCount[e.base] = (baseCount[e.base] || 0) + 1; });
-    const taken = new Set();
-    entries.forEach(e => { if (baseCount[e.base] === 1 && !e.v.sku) taken.add(e.base); });
-    entries.forEach((e, idx) => {
-      let sku;
-      if (e.v.sku && !taken.has(String(e.v.sku))) sku = String(e.v.sku);
-      else if (baseCount[e.base] === 1) sku = e.base;
-      else {
-        const clean = String(e.size).replace(/[^0-9A-Za-z\u0E00-\u0E7F.]/g, '');
-        sku = e.base + '-' + (clean || String(idx + 1));
-      }
-      let uniq = sku, n = 2;
-      while (taken.has(uniq)) uniq = sku + '-' + (n++);
-      taken.add(uniq);
-      rows.push({ name: e.p.name, sku: uniq, size: e.size, cat: e.cats, barcode: e.v.barcode || '-', cost: +(e.v.cost || 0), price: +(e.v.price || 0), stock: +(e.v.stock || 0), imgUrl: e.imgUrl });
-    });
-    if (!rows.length) return window.showAlert?.('ไม่มีข้อมูล', 'ยังไม่มีสินค้าให้ส่งออก', true);
-
-    window.showToast?.('กำลังสร้างไฟล์ Excel พร้อมรูปภาพ...');
+    const catByName = new Map((db.categories || []).map(c => [c.name, c]));
+    const catById = new Map((db.categories || []).map(c => [c.id, c]));
+    const mainSub = p => {
+      const c = catByName.get((p.cat || [])[0]);
+      if (c && c.parentId) return { main: (catById.get(c.parentId) || {}).name || '', sub: c.name };
+      return { main: c ? c.name : ((p.cat || [])[0] || ''), sub: '' };
+    };
+    const used = new Set();
+    const uniq = s => { let u = s, n = 2; while (used.has(u.toLowerCase())) u = `${s}-${n++}`; used.add(u.toLowerCase()); return u; };
+    const imgName = p => { if (p.imageFile) return p.imageFile; if (!p.imageUrl) return ''; try { return decodeURIComponent(new URL(p.imageUrl, location.href).pathname.split('/').pop()); } catch (_) { return ''; } };
+    const products = Object.values(db.products || {}).filter(p => !p.isDeleted).sort((a, b) => naturalCompare(a.name, b.name));
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('รายการสินค้า');
-    ws.columns = [
-      { header: 'รูปภาพ', key: 'img', width: 12 },
-      { header: 'รหัสสินค้า (SKU)', key: 'sku', width: 16 },
-      { header: 'ชื่อสินค้า', key: 'name', width: 28 },
-      { header: 'ขนาด/รุ่น', key: 'size', width: 14 },
-      { header: 'หมวดหมู่', key: 'cat', width: 18 },
-      { header: 'บาร์โค้ด', key: 'barcode', width: 16 },
-      { header: 'ราคาทุน', key: 'cost', width: 10 },
-      { header: 'ราคาขาย', key: 'price', width: 10 },
-      { header: 'คงเหลือ', key: 'stock', width: 10 },
-      { header: 'ลิงก์รูปภาพ', key: 'link', width: 26 }
-    ];
-    ws.getRow(1).font = { bold: true };
-
-    // ใส่แถวข้อมูลทั้งหมดก่อน (เร็ว, ไม่ต้องรอเน็ตเวิร์ก) แล้วค่อยดึงรูปทีหลัง
-    const rowMeta = rows.map((r, i) => {
-      const rowIdx = i + 2; // แถว 1 คือ header
-      const row = ws.addRow({ sku: r.sku, name: r.name, size: r.size, cat: r.cat, barcode: r.barcode, cost: r.cost, price: r.price, stock: r.stock, link: r.imgUrl || '-' });
-      row.height = 54; // สูงพอสำหรับ thumbnail
-      if (r.imgUrl && r.imgUrl !== '-') {
-        row.getCell('link').value = { text: r.name, hyperlink: r.imgUrl };
-        row.getCell('link').font = { color: { argb: 'FF2563EB' }, underline: true };
-      }
-      return { r, rowIdx };
+    const rows = [];
+    products.forEach(p => {
+      const vs = (p.variants || []).length ? p.variants : [{ sizeName: 'ปกติ', barcode: '', cost: 0, price: 0, stock: 0, fractions: [] }];
+      const multi = vs.length > 1, { main, sub } = mainSub(p), status = p.isDisabled ? 'ไม่ใช้' : 'ใช้';
+      vs.forEach((v, idx) => {
+        const size = (v.sizeName || '').trim() || 'ปกติ';
+        const sku = uniq(v.sku ? String(v.sku) : (multi ? `${p.code || p.id}-${String(idx + 1).padStart(2, '0')}` : String(p.code || p.id)));
+        const disp = p.name + (size !== 'ปกติ' && size !== '-' ? ' ' + size : '');
+        rows.push({ prod: p, type: 'หลัก', main, sub, img: imgName(p), sku, bar: v.barcode || '', name: disp, size, unit: p.unit || 'ชิ้น', cost: +v.cost || 0, price: +v.price || 0, group: p.name, parent: '', ratio: '', stock: +v.stock || 0, min: +(v.minStock ?? p.minStock ?? 5), status });
+        (v.fractions || []).forEach((f, k) => {
+          const mult = +f.fractionMultiplier || 0;
+          rows.push({ type: 'หน่วยย่อย', main, sub, img: '', sku: uniq(`${sku}-S${k + 1}`), bar: f.barcode || '', name: disp, size, unit: f.fractionName || '', cost: '', price: +f.fractionPrice || 0, group: p.name, parent: sku, ratio: mult > 0 ? Math.round(1 / mult * 1000) / 1000 : '', stock: '', min: '', status });
+        });
+      });
     });
-
-    // BUG FIX / PERF (#7): เดิม fetch รูปทีละแถวแบบ sequential (await ใน for loop) — ถ้าสินค้า
-    // หลายร้อย/พันรายการและรูปมาจากโฮสต์ภายนอกจะรวมกันช้ามาก เปลี่ยนเป็นดึงแบบขนานทีละ batch
-    // (6 รูปพร้อมกัน) เร็วขึ้นหลายเท่าโดยยังไม่ยิงคำขอพร้อมกันทั้งหมดจนโดน rate-limit ฝั่งโฮสต์รูป
-    // แคชรูปที่ดึงมาแล้วไว้ ถ้าสินค้าเดียวกันมีหลายขนาด/สีจะได้ไม่ต้องดึงรูปซ้ำ
-    const imageCache = {};
-    const uniqueUrls = [...new Set(rowMeta.filter(m => m.r.imgUrl && m.r.imgUrl !== '-').map(m => m.r.imgUrl))];
-    const BATCH_SIZE = 6;
-    for (let i = 0; i < uniqueUrls.length; i += BATCH_SIZE) {
-      const batch = uniqueUrls.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map(async (url) => {
-        try {
-          const res = await fetch(url);
-          if (!res.ok) throw new Error('fetch failed');
-          const blob = await res.blob();
-          const buf = await blob.arrayBuffer();
-          let ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
-          if (!['png', 'jpg', 'gif'].includes(ext)) ext = 'png'; // ExcelJS รองรับแค่ 3 แบบนี้
-          imageCache[url] = wb.addImage({ buffer: buf, extension: ext });
-        } catch (e) {
-          console.warn('embed image failed for', url, e); // ข้ามรูปที่ดึงไม่ได้ (เช่นติด CORS) แต่ยังส่งออกแถวข้อมูลต่อ
+    // รูปสินค้า: ฝังรูปขนาดย่อ (≤ 240px) ลงในไฟล์ทุกแถว "หลัก" เพื่อให้ไฟล์เดียวมีทั้งข้อมูลและรูป
+    const thumbCache = new Map();
+    const thumbFor = async url => {
+      if (!url) return null;
+      if (thumbCache.has(url)) return thumbCache.get(url);
+      let out = null;
+      try {
+        const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 15000);
+        const res = await fetch(url, { signal: ctl.signal, mode: 'cors' }); clearTimeout(to);
+        if (res.ok) {
+          const bmp = await createImageBitmap(await res.blob());
+          const k = Math.min(1, 240 / Math.max(bmp.width, bmp.height));
+          const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+          cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+          const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.8));
+          out = blob ? await blob.arrayBuffer() : null;
         }
-      }));
+      } catch (_) { out = null; }
+      thumbCache.set(url, out);
+      return out;
+    };
+    let withPhoto = 0;
+    const imgIdByUrl = new Map();
+    // (ต้องสร้าง wb ก่อนบล็อกนี้)
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (r.type !== 'หลัก') continue;
+      const url = r.prod && r.prod.imageUrl;
+      if (!url) continue;
+      if (!imgIdByUrl.has(url)) {
+        const buf = await thumbFor(url);
+        imgIdByUrl.set(url, buf ? wb.addImage({ buffer: buf, extension: 'jpeg' }) : null);
+      }
+      const id = imgIdByUrl.get(url);
+      if (id === null || id === undefined) continue;
+      r.imgId = id; withPhoto++;
     }
-    rowMeta.forEach(({ r, rowIdx }) => {
-      if (imageCache[r.imgUrl]) {
-        ws.addImage(imageCache[r.imgUrl], { tl: { col: 0.1, row: rowIdx - 1 + 0.1 }, ext: { width: 50, height: 50 } });
+
+    const ws = wb.addWorksheet('รายการสินค้า');
+    const cols = window.PRODUCT_SHEET_COLUMNS;
+    ws.addRow(cols);
+    ws.getRow(1).font = { bold: true }; ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
+    rows.forEach((r, i) => {
+      const rr = ws.addRow([i + 1, r.main, r.sub, r.img, r.sku, r.bar, r.name, r.size, r.unit, r.cost === '' ? '' : r.cost, r.price, r.group, r.type, r.parent, r.ratio, r.stock, r.min, r.status]);
+      if (r.imgId !== undefined) {
+        rr.height = 52;
+        ws.addImage(r.imgId, { tl: { col: 3.08, row: rr.number - 1 + 0.08 }, ext: { width: 48, height: 48 } });
       }
     });
-
-    const buffer = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+    ws.autoFilter = { from: 'A1', to: { row: 1, column: cols.length } };
+    [8, 12, 12, 22, 16, 16, 36, 12, 10, 10, 10, 30, 12, 16, 16, 12, 10, 10].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+    const last = rows.length + 1;
+    ws.dataValidations.add(`M2:M${last}`, { type: 'list', allowBlank: true, formulae: ['"หลัก,หน่วยย่อย"'] });
+    ws.dataValidations.add(`R2:R${last}`, { type: 'list', allowBlank: true, formulae: ['"ใช้,ไม่ใช้"'] });
+    const guide = wb.addWorksheet('คำอธิบาย');
+    [['คอลัมน์', 'ความหมายและกฎ'],
+     ['ประเภทแถว', 'หลัก = สินค้า 1 ขนาด  •  หน่วยย่อย = หน่วยแบ่งขายของขนาดที่อ้างใน "รหัสสินค้าหลัก"'],
+     ['รหัสสินค้า (SKU)', 'ต้องไม่ซ้ำทุกแถว สินค้าหลายขนาดจะต่อท้ายด้วยเลขลำดับ เช่น 00080-01, 00080-02'],
+     ['กลุ่มสินค้า', 'ชื่อกลุ่มเดียวกัน = สินค้าขนาดต่างกันของชุดเดียวกัน และใช้รูปร่วมกันได้'],
+     ['จำนวนหน่วยย่อยต่อ 1 หน่วยหลัก', 'เช่น 1 เส้น = 4 เมตร ใส่ 4 (ใช้กับแถวหน่วยย่อยเท่านั้น)'],
+     ['สถานะ', 'ใช้ = ขายได้  •  ไม่ใช้ = ซ่อนจากหน้าขาย (ตั้งที่ทั้งกลุ่มสินค้า)'],
+     ['การนำเข้า', 'แถวที่ไม่ผ่านการตรวจจะถูกข้าม และแสดงเหตุผลก่อนยืนยัน ไม่มีการเขียนทับแถวที่ไม่ผ่าน']
+    ].forEach(r => guide.addRow(r));
+    guide.getRow(1).font = { bold: true }; guide.getColumn(1).width = 30; guide.getColumn(2).width = 100;
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `รายการสินค้า-${new Date().toISOString().slice(0,10)}.xlsx`;
+    a.href = URL.createObjectURL(blob); a.download = `รายการสินค้า-${new Date().toISOString().slice(0,10)}.xlsx`;
     document.body.appendChild(a); a.click(); a.remove();
-    window.showToast?.('ส่งออกไฟล์ Excel พร้อมรูปภาพเรียบร้อย');
+    window.showToast?.(`ส่งออก ${rows.length} แถว • มีรูป ${withPhoto} แถว`);
   };
 
   // Downloads every product photo as a ZIP, with each file renamed to the product
@@ -7512,32 +7615,70 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
  const KEY='smartpos_activity_log_v1', MAX=500;
  const $=id=>document.getElementById(id);
  function read(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(_){return []}}
+ // ---------- บันทึกกิจกรรม: ส่งขึ้น audit_logs ตาม schema จริง และไม่ทำให้รายการหายเมื่อส่งไม่สำเร็จ ----------
+ const OUT_KEY='smartpos_audit_outbox_v2', MAX_OUT=1000, MAX_ATTEMPTS=5;
+ function readOut(){try{return JSON.parse(localStorage.getItem(OUT_KEY)||'[]')}catch(_){return []}}
+ function writeOut(a){try{localStorage.setItem(OUT_KEY,JSON.stringify(a.slice(-MAX_OUT)))}catch(_){}}
+ function removeOut(id){writeOut(readOut().filter(x=>x.id!==id));}
+ function patchLocal(id,patch){const arr=read();const e=arr.find(x=>x.id===id);if(e){Object.assign(e,patch);try{localStorage.setItem(KEY,JSON.stringify(arr))}catch(_){}}}
+ function localOnly(type,message,detail){const arr=read();arr.unshift({id:'L'+Date.now()+Math.random().toString(36).slice(2,6),time:new Date().toISOString(),type,message,detail:String(detail||''),cloud:'none'});try{localStorage.setItem(KEY,JSON.stringify(arr.slice(0,MAX)))}catch(_){}}
+ function newId(){return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():('e'+Date.now()+Math.random().toString(36).slice(2,10));}
  function add(type,message,detail){
-  const event={time:new Date().toISOString(),type:String(type||'INFO'),message:String(message||''),detail:String(detail||'')};
-  const arr=read();arr.unshift(event);try{localStorage.setItem(KEY,JSON.stringify(arr.slice(0,MAX)))}catch(_){} if($('sp-observe-panel')?.classList.contains('open'))renderLog();
-  // Best-effort cloud audit: never block POS actions; local log remains available if auth/RLS/network rejects it.
-  try {
-   const client=window.getSupabaseClient?.();
-   if(client && !event._cloudAttempted) {
-    if(window.__spAuditQueue) window.__spAuditQueue.push(event); else window.__spAuditQueue=[event];
-    if(!window.__spAuditPump){window.__spAuditPump=true;(async()=>{
-     try {
-      while(window.__spAuditQueue?.length){
-       const ev=window.__spAuditQueue.shift();
-       try {
-        const {data:{session},error:sessionError}=await client.auth.getSession();
-        if(sessionError||!session?.user) continue;
-        const u=window.db?.activeUser||{};
-        const row={id:crypto.randomUUID(),occurred_at:ev.time,actor_app_user_id:null,actor_name:String(u.name||session.user.email||'ผู้ใช้ที่ยืนยันตัวตนแล้ว').slice(0,160),actor_role:String(u.role||'UNKNOWN').slice(0,40),action:String(ev.type||'INFO').slice(0,80),entity:'application',entity_id:null,detail:(String(ev.message||'')+' '+String(ev.detail||'')).trim().slice(0,4000),meta:{source:'Smart POS Activity Log',email:session.user.email||null},device_id:String(window.getDeviceId?.()||'browser').slice(0,160)};
-        const {error}=await client.from('audit_logs').insert(row);
-        if(error && !window.__spAuditWarned){window.__spAuditWarned=true;const a=read();a.unshift({time:new Date().toISOString(),type:'WARN',message:'ส่ง Audit Log ไป Supabase ไม่สำเร็จ',detail:String(error.message||error).slice(0,500)});try{localStorage.setItem(KEY,JSON.stringify(a.slice(0,MAX)))}catch(_){}}
-       } catch(err) { if(!window.__spAuditWarned){window.__spAuditWarned=true;const a=read();a.unshift({time:new Date().toISOString(),type:'WARN',message:'ส่ง Audit Log ไป Supabase ไม่สำเร็จ',detail:String(err?.message||err).slice(0,500)});try{localStorage.setItem(KEY,JSON.stringify(a.slice(0,MAX)))}catch(_){}} }
-      }
-     } finally {window.__spAuditPump=false;}
-    })();}
-   }
-  } catch(_) { /* Audit logging must never interrupt checkout or saving. */ }
+  const event={id:newId(),time:new Date().toISOString(),type:String(type||'INFO'),message:String(message||''),detail:String(detail||''),cloud:'pending'};
+  const arr=read();arr.unshift(event);
+  try{localStorage.setItem(KEY,JSON.stringify(arr.slice(0,MAX)))}catch(_){}
+  const ob=readOut();ob.push({...event,attempts:0});writeOut(ob);
+  if($('sp-observe-panel')?.classList.contains('open'))renderLog();
+  pumpCloud();
  }
+ let lastWarnKey='',lastWarnAt=0;
+ function warnCloud(msg){const k=String(msg).slice(0,120);if(k===lastWarnKey&&Date.now()-lastWarnAt<300000)return;lastWarnKey=k;lastWarnAt=Date.now();localOnly('WARN','ส่ง Audit Log ขึ้น Supabase ไม่สำเร็จ (จะลองส่งใหม่อัตโนมัติ)',msg);}
+ async function pumpCloud(){
+  if(window.__spAuditPump)return;
+  window.__spAuditPump=true;
+  let retryIn=0;
+  try{
+   const client=window.getSupabaseClient?.();
+   if(!client){return;}                                   // ยังไม่ได้เชื่อม Supabase: เก็บในคิว ไม่ทิ้ง
+   while(true){
+    const ob=readOut();
+    if(!ob.length)break;
+    const ev=ob[0];
+    const sess=await client.auth.getSession();
+    const session=sess?.data?.session;
+    if(sess?.error||!session?.user){patchLocal(ev.id,{cloud:'pending',cloudError:'ยังไม่ได้เข้าสู่ระบบ Supabase'});retryIn=60000;break;}
+    const u=window.db?.activeUser||{};
+    // คอลัมน์ตรงกับ public.audit_logs ใน SMART-POS-SETUP.sql
+    const row={
+     id:ev.id,
+     created_at:ev.time,
+     actor_user_id:null,                                  // ไม่ใส่ id ของแอป เพราะอาจไม่ตรงกับ app_users แล้วทำให้ FK ล้ม ชื่อและบทบาทเก็บใน details แทน
+     actor_name:String(u.name||session.user.email||'ไม่ระบุ').slice(0,160),
+     action:(String(ev.type||'INFO')+': '+String(ev.message||'')).slice(0,300),
+     entity_type:'application',
+     entity_id:null,
+     details:{level:ev.type,message:ev.message,detail:ev.detail,app_user:u.name||null,app_role:u.role||null,device:window.getDeviceId?.()||null,auth_email:session.user.email||null,source:'Smart POS Activity Log'}
+    };
+    const {error}=await client.from('audit_logs').insert(row);
+    // อ่านคิวใหม่ทุกครั้งหลัง await: กันการเขียนทับรายการที่เพิ่มระหว่างรอ
+    if(!error){removeOut(ev.id);patchLocal(ev.id,{cloud:'sent',cloudError:''});continue;}
+    const msg=error.message||String(error);
+    ev.attempts=(ev.attempts||0)+1;
+    if(ev.attempts>=MAX_ATTEMPTS){                        // ส่งไม่ผ่านหลายครั้ง: ย้ายออกจากคิวเพื่อไม่ให้รายการอื่นค้าง แต่ยังเก็บในเครื่องพร้อมสาเหตุ
+     removeOut(ev.id);patchLocal(ev.id,{cloud:'rejected',cloudError:msg});warnCloud(msg);continue;
+    }
+    const cur=readOut();const k=cur.findIndex(x=>x.id===ev.id);if(k>=0){cur[k]=ev;writeOut(cur);}patchLocal(ev.id,{cloud:'failed',cloudError:msg});warnCloud(msg);
+    retryIn=30000;break;
+   }
+  }catch(err){warnCloud(err?.message||String(err));retryIn=30000;}
+  finally{
+   window.__spAuditPump=false;
+   if(retryIn&&!window.__spAuditRetry){window.__spAuditRetry=setTimeout(()=>{window.__spAuditRetry=null;pumpCloud();},retryIn);}
+  }
+ }
+ window.addEventListener('online',()=>pumpCloud());
+ setInterval(()=>{if(readOut().length)pumpCloud();},60000);
+ const CLOUD_TXT={sent:'✅ ส่งขึ้นเซิร์ฟเวอร์แล้ว',pending:'⏳ รอส่ง',failed:'⚠️ ส่งไม่สำเร็จ (จะลองใหม่)',rejected:'❌ ส่งไม่ได้ (ถูกปฏิเสธ)',none:'เก็บในเครื่องเท่านั้น'};
  window.smartPOSActivityLog={add,read};
  // Observe existing UI notifications without changing their original behavior.
  function wrap(name,type){const old=window[name];if(typeof old!=='function'||old.__spObserved)return;const fn=function(){try{let msg=Array.from(arguments).map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' — ');add(type,msg,'');}catch(_){}return old.apply(this,arguments)};fn.__spObserved=true;window[name]=fn;}
@@ -7558,7 +7699,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
  }
  function calc(){const ps=products();const withImg=ps.filter(p=>imgOf(p));const noImg=ps.filter(p=>!imgOf(p));const variants=ps.reduce((n,p)=>n+(Array.isArray(p.variants)?p.variants.filter(v=>!v.isDeleted&&v.deleted!==true).length:0),0);return {ps,withImg,noImg,variants}}
  function escape(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
- function renderLog(){const logs=read();$('sp-observe-log').innerHTML=logs.length?logs.slice(0,150).map(x=>`<div class="sp-log"><div><b>${escape(x.type)}</b> · ${escape(new Date(x.time).toLocaleString('th-TH'))}</div><div>${escape(x.message)}</div>${x.detail?`<div class="text-slate-500 text-xs">${escape(x.detail)}</div>`:''}</div>`).join(''):'ยังไม่มี Log ที่บันทึกไว้'}
+ function renderLog(){const logs=read();$('sp-observe-log').innerHTML=logs.length?logs.slice(0,150).map(x=>`<div class="sp-log"><div><b>${escape(x.type)}</b> · ${escape(new Date(x.time).toLocaleString('th-TH'))}</div><div>${escape(x.message)}</div>${x.detail?`<div class="text-slate-500 text-xs">${escape(x.detail)}</div>`:''}<div class="text-[11px] ${x.cloud==='sent'?'text-emerald-700':(x.cloud==='failed'||x.cloud==='rejected')?'text-rose-700':'text-slate-400'}">${escape(CLOUD_TXT[x.cloud]||CLOUD_TXT.none)}${x.cloudError?' — '+escape(x.cloudError):''}</div></div>`).join(''):'ยังไม่มี Log ที่บันทึกไว้'}
  function render(){const a=calc();$('sp-observe-stats').innerHTML=[['สินค้าทั้งหมด',a.ps.length],['สินค้าที่มีรูป',a.withImg.length],['สินค้าที่ไม่มีรูป',a.noImg.length],['จำนวนตัวเลือก/Variant',a.variants]].map(x=>`<div class="sp-stat"><div class="text-slate-500 text-xs">${x[0]}</div><div class="sp-num">${x[1].toLocaleString('th-TH')}</div></div>`).join('');
  const online=navigator.onLine;const hasDb=!!window.db;const client=window.getSupabaseClient?.();$('sp-observe-status').innerHTML=`<b>สถานะเบราว์เซอร์:</b> ${online?'🟢 ออนไลน์':'🟠 ออฟไลน์'}<br><b>ข้อมูลในแอป:</b> ${hasDb?'พบ db ในหน่วยความจำ':'ไม่พบ db'}<br><b>Supabase Client:</b> ${client?'พบ client (ยังไม่ยืนยันสิทธิ์/การเชื่อมต่อจริง)':'ยังไม่พบ client'}<br><b>เวลาตรวจล่าสุด:</b> ${new Date().toLocaleString('th-TH')}<br><b>หมายเหตุ:</b> จำนวนสินค้าอ้างอิงข้อมูลที่โหลดอยู่ในแอป ณ เวลานี้ อาจยังไม่ใช่ยอดทั้งหมดใน Cloud หากยังไม่ได้ซิงก์`;
  const adv=[];if(a.noImg.length)adv.push(`• มีสินค้า ${a.noImg.length} รายการที่ยังไม่มี URL/ข้อมูลรูปจริง (ไม่นับ emoji หรือรูปแทนชั่วคราว) ควรตรวจชื่อ/SKU และจับคู่รูปให้ถูกต้อง`);if(!online)adv.push('• ออฟไลน์: ตรวจคิวซิงก์ก่อนปิดหน้า');if(!client)adv.push('• ยังไม่พบ Supabase Client: ตรวจ Project URL และ anon key');adv.push('• รูปที่ไม่ได้ใช้จะนับได้เมื่อกดตรวจ Storage และบัญชีมีสิทธิ์ list bucket; ถ้า RLS/Storage policy ปฏิเสธ ระบบจะแสดงข้อผิดพลาดแทนการเดาจำนวน');adv.push('• Log ในเครื่องเก็บไว้ในเบราว์เซอร์ ส่วนกิจกรรมจะพยายามส่งไปตาราง audit_logs เมื่อมี session และสิทธิ์ RLS อนุญาต; หากส่งไม่สำเร็จให้ดูคำเตือนใน Log และตรวจตาราง/สิทธิ์');$('sp-observe-advice').innerHTML='<b>คำแนะนำ</b><br>'+adv.map(escape).join('<br>');renderLog();}
