@@ -4452,72 +4452,78 @@ window.formatMoney = formatMoney;
         if (confirmBtn) confirmBtn.disabled = !plan.groups.length;
       }
 
-      // อ่านไฟล์ด้วย ExcelJS: ได้ทั้งข้อมูลแถวและรูปที่ฝังในไฟล์ (รูปผูกกับแถวที่อยู่ในคอลัมน์ "รูปสินค้า")
-      const cellText = v => {
-        if (v == null) return '';
-        if (v instanceof Date) return v.toISOString();
-        if (typeof v === 'object') {
-          if (v.richText) return v.richText.map(x => x.text).join('');
-          if (v.result !== undefined) return cellText(v.result);
-          if (v.text !== undefined) return String(v.text);
-          return '';
+      // อ่านไฟล์นำเข้า: ข้อมูลแถวด้วย SheetJS (อ่านค่าเซลล์ได้เสถียร) และรูปที่ฝังด้วย JSZip อ่านโดยตรงจาก drawing ของไฟล์
+      // (ไม่ใช้ ExcelJS ตอนนำเข้า เพราะไฟล์ที่สร้างจากเครื่องมืออื่นทำให้ ExcelJS ล้มด้วย r.anchors)
+      const normZipPath = p => { const out = []; p.split('/').forEach(seg => { if (seg === '..') out.pop(); else if (seg && seg !== '.') out.push(seg); }); return out.join('/'); };
+      async function readEmbeddedPhotos(buf){
+        const map = new Map();
+        if (!window.JSZip) return map;
+        const zip = await JSZip.loadAsync(buf);
+        const readText = async p => { const f = zip.file(p); return f ? await f.async('string') : null; };
+        const relTargets = async (relPath, baseDir) => {
+          const s = await readText(relPath); const out = [];
+          if (!s) return out;
+          const doc = new DOMParser().parseFromString(s, 'application/xml');
+          const rels = doc.getElementsByTagName('Relationship');
+          for (let i = 0; i < rels.length; i++) {
+            const tgt = rels[i].getAttribute('Target') || '';
+            const full = tgt.startsWith('/') ? tgt.slice(1) : normZipPath(baseDir + '/' + tgt);
+            out.push({ id: rels[i].getAttribute('Id'), type: rels[i].getAttribute('Type') || '', target: full });
+          }
+          return out;
+        };
+        const wbXml = await readText('xl/workbook.xml'); if (!wbXml) return map;
+        const wbDoc = new DOMParser().parseFromString(wbXml, 'application/xml');
+        const sheets = wbDoc.getElementsByTagName('sheet');
+        const sheetRid = (sheets[0] && (sheets[0].getAttribute('r:id') || sheets[0].getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id'))) || null;
+        if (!sheetRid) return map;
+        const wbRels = await relTargets('xl/_rels/workbook.xml.rels', 'xl');
+        const sheetPath = (wbRels.find(r => r.id === sheetRid) || {}).target; if (!sheetPath) return map;
+        const sheetDir = sheetPath.split('/').slice(0, -1).join('/'), sheetFile = sheetPath.split('/').pop();
+        const sheetRels = await relTargets(sheetDir + '/_rels/' + sheetFile + '.rels', sheetDir);
+        for (const dr of sheetRels.filter(r => /\/drawing$/.test(r.type) || /drawings\/drawing\d+\.xml$/.test(r.target))) {
+          const dXml = await readText(dr.target); if (!dXml) continue;
+          const dDir = dr.target.split('/').slice(0, -1).join('/'), dFile = dr.target.split('/').pop();
+          const dRels = await relTargets(dDir + '/_rels/' + dFile + '.rels', dDir);
+          const dDoc = new DOMParser().parseFromString(dXml, 'application/xml');
+          const anchors = Array.from(dDoc.documentElement.children).filter(n => /Anchor$/.test(n.localName));
+          for (const a of anchors) {
+            const from = a.getElementsByTagNameNS('*', 'from')[0]; if (!from) continue;
+            const rowEl = from.getElementsByTagNameNS('*', 'row')[0]; if (!rowEl) continue;
+            const rowNum = parseInt(rowEl.textContent, 10) + 1;
+            const blip = a.getElementsByTagNameNS('*', 'blip')[0]; if (!blip) continue;
+            const embed = blip.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'embed') || blip.getAttribute('r:embed');
+            const media = (dRels.find(r => r.id === embed) || {}).target; if (!media || !zip.file(media)) continue;
+            const ext = (media.split('.').pop() || 'jpeg').toLowerCase();
+            if (!map.has(rowNum)) map.set(rowNum, { buffer: await zip.file(media).async('arraybuffer'), ext: ext === 'jpg' ? 'jpeg' : ext });
+          }
         }
-        return String(v);
-      };
+        return map;
+      }
+
       window.handleOpeningStockFile = async function(e){
         const file = e.target.files[0];
         e.target.value = '';
         if (!file) return;
         try {
-          if (!window.ExcelJS) throw new Error('ไม่พบไลบรารี ExcelJS — ตรวจการเชื่อมต่ออินเทอร์เน็ต');
-          const wb = new ExcelJS.Workbook();
-          await wb.xlsx.load(await file.arrayBuffer());
-          const ws = wb.getWorksheet('รายการสินค้า') || wb.worksheets[0];
-          const headers = [];
-          ws.getRow(1).eachCell((c, col) => { headers[col - 1] = cellText(c.value).trim(); });
-          const imgByRow = new Map();
-          ws.getImages().forEach(im => {
-            const img = wb.getImage(im.imageId);
-            if (img && img.buffer) imgByRow.set(im.range.tl.nativeRow + 1, { buffer: img.buffer, ext: (img.extension || 'jpeg').toLowerCase() });
-          });
-          const rows = [];
-          ws.eachRow((row, rn) => {
-            if (rn === 1) return;
-            const o = {};
-            headers.forEach((h, i) => { if (h) o[h] = cellText(row.getCell(i + 1).value); });
-            o.__img = imgByRow.get(rn) || null;
-            rows.push(o);
-          });
+          if (!window.XLSX) throw new Error('ไม่พบไลบรารี SheetJS — ตรวจการเชื่อมต่ออินเทอร์เน็ต');
+          const buf = await file.arrayBuffer();
+          const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+          const sheetName = wb.SheetNames.includes('รายการสินค้า') ? 'รายการสินค้า' : wb.SheetNames[0];
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '', raw: false, blankrows: true });
+          let imgByRow = new Map();
+          try { imgByRow = await readEmbeddedPhotos(buf); } catch (err) { console.warn('อ่านรูปในไฟล์ไม่ได้ จะนำเข้าข้อมูลโดยไม่มีรูป', err); }
+          rows.forEach((r, i) => { r.__img = imgByRow.get(i + 2) || null; });
           const plan = buildImportPlan(rows);
           if (!plan.groups.length && !plan.rejected.length) return window.showAlert?.('ไม่พบข้อมูล', 'ไม่พบแถวสินค้าในไฟล์', true);
           pendingImportList = plan.groups;
           renderImportPreview(plan);
+          if (imgByRow.size && !plan.stats.photos) console.warn('พบรูปในไฟล์แต่ไม่ผูกกับแถวหลัก ตรวจคอลัมน์รูปสินค้า');
         } catch (err) {
           console.error(err);
           window.showAlert?.('อ่านไฟล์ไม่สำเร็จ', err.message || String(err), true);
         }
       };
-
-      // อัปโหลดรูปที่ฝังในไฟล์ขึ้น Storage (bucket product-images) แล้วผูกกับสินค้า — ล้มเหลวได้โดยไม่กระทบข้อมูลสินค้า
-      async function uploadImportPhotos(groups){
-        const client = window.getSupabaseClient?.();
-        const out = { ok: 0, fail: 0, skipped: 0, noClient: !client };
-        for (const g of groups) {
-          if (!g.img) continue;
-          if (!client) { out.skipped++; continue; }
-          try {
-            const ext = g.img.ext === 'png' ? 'png' : 'jpg';
-            const path = `${g.pid}_${Date.now()}.${ext}`;
-            const blob = new Blob([g.img.buffer], { type: ext === 'png' ? 'image/png' : 'image/jpeg' });
-            const { error } = await client.storage.from('product-images').upload(path, blob, { contentType: blob.type, upsert: true });
-            if (error) throw error;
-            const { data } = client.storage.from('product-images').getPublicUrl(path);
-            const p = db.products[g.pid]; if (p) p.imageUrl = data.publicUrl;
-            out.ok++;
-          } catch (err) { console.warn('photo upload failed', g.name, err); out.fail++; }
-        }
-        return out;
-      }
 
       window.confirmOpeningStockImport = async function(){
         if (!pendingImportList.length) return;
