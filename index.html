@@ -5916,6 +5916,8 @@ window.saveProduct = async function() {
   let sku = document.getElementById('pm-sku').value.trim();
   if (!sku) sku = window.getAutoSku(); // fast entry: don't block on a SKU nobody typed in
 
+  const p = id ? db.products[id] : null;
+  const pid = id || ('p-' + Date.now());
   // ตรวจความซ้ำก่อนบันทึก: รหัสสินค้า / SKU ขนาด / บาร์โค้ด ต้องไม่ซ้ำกับสินค้าอื่น และชื่อ+ขนาดต้องไม่ซ้ำ
   // (ป้องกันการเขียนทับกันตอนนำเข้า/ซิงก์ และป้องกันสินค้าที่ขายสับสน)
   {
@@ -5944,8 +5946,6 @@ window.saveProduct = async function() {
     if (errs.length) return window.showAlert?.('ข้อมูลซ้ำ', [...new Set(errs)].slice(0, 5).join('\n'), true);
   }
 
-  const p = id ? db.products[id] : null;
-  const pid = id || ('p-' + Date.now());
 
   let imageUrl = p?.imageUrl || null;
   let imageEmoji = document.getElementById('pm-image').value.trim() || (imageUrl ? '' : '📦');
@@ -7643,7 +7643,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
  const $=id=>document.getElementById(id);
  function read(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(_){return []}}
  // ---------- บันทึกกิจกรรม: ส่งขึ้น audit_logs ตาม schema จริง และไม่ทำให้รายการหายเมื่อส่งไม่สำเร็จ ----------
- const OUT_KEY='smartpos_audit_outbox_v2', MAX_OUT=1000, MAX_ATTEMPTS=5;
+ var OUT_KEY='smartpos_audit_outbox_v2', MAX_OUT=1000, MAX_ATTEMPTS=5;
  function readOut(){try{return JSON.parse(localStorage.getItem(OUT_KEY)||'[]')}catch(_){return []}}
  function writeOut(a){try{localStorage.setItem(OUT_KEY,JSON.stringify(a.slice(-MAX_OUT)))}catch(_){}}
  function removeOut(id){writeOut(readOut().filter(x=>x.id!==id));}
@@ -7658,7 +7658,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
   if($('sp-observe-panel')?.classList.contains('open'))renderLog();
   pumpCloud();
  }
- let lastWarnKey='',lastWarnAt=0;
+ var lastWarnKey='',lastWarnAt=0;
  function warnCloud(msg){const k=String(msg).slice(0,120);if(k===lastWarnKey&&Date.now()-lastWarnAt<300000)return;lastWarnKey=k;lastWarnAt=Date.now();localOnly('WARN','ส่ง Audit Log ขึ้น Supabase ไม่สำเร็จ (จะลองส่งใหม่อัตโนมัติ)',msg);}
  async function pumpCloud(){
   if(window.__spAuditPump)return;
@@ -7705,7 +7705,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
  }
  window.addEventListener('online',()=>pumpCloud());
  setInterval(()=>{if(readOut().length)pumpCloud();},60000);
- const CLOUD_TXT={sent:'✅ ส่งขึ้นเซิร์ฟเวอร์แล้ว',pending:'⏳ รอส่ง',failed:'⚠️ ส่งไม่สำเร็จ (จะลองใหม่)',rejected:'❌ ส่งไม่ได้ (ถูกปฏิเสธ)',none:'เก็บในเครื่องเท่านั้น'};
+ var CLOUD_TXT={sent:'✅ ส่งขึ้นเซิร์ฟเวอร์แล้ว',pending:'⏳ รอส่ง',failed:'⚠️ ส่งไม่สำเร็จ (จะลองใหม่)',rejected:'❌ ส่งไม่ได้ (ถูกปฏิเสธ)',none:'เก็บในเครื่องเท่านั้น'};
  window.smartPOSActivityLog={add,read};
  // Observe existing UI notifications without changing their original behavior.
  function wrap(name,type){const old=window[name];if(typeof old!=='function'||old.__spObserved)return;const fn=function(){try{let msg=Array.from(arguments).map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' — ');add(type,msg,'');}catch(_){}return old.apply(this,arguments)};fn.__spObserved=true;window[name]=fn;}
