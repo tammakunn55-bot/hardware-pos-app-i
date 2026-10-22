@@ -2378,6 +2378,23 @@ window.formatMoney = formatMoney;
             const { error: linkErr } = await client.from('product_categories').upsert(linkRows, { onConflict: 'product_id,category_id' });
             if (linkErr) throw linkErr;
           }
+          // ลบความเชื่อมโยงหมวดที่ถูกเอาออกจากสินค้าแล้ว (เดิมมีแต่ upsert จึงกลับมาเองตอนโหลดใหม่)
+          {
+            const wanted = new Set(linkRows.map(r => r.product_id + '|' + r.category_id));
+            // อ่านทีละ 1000 แถว (PostgREST จำกัดค่าเริ่มต้นไว้ที่ 1000)
+            const oldLinks = [];
+            for (let from = 0; ; from += 1000) {
+              const { data: page, error: oldErr } = await client.from('product_categories').select('product_id,category_id').range(from, from + 999);
+              if (oldErr) throw oldErr;
+              oldLinks.push(...(page || []));
+              if (!page || page.length < 1000) break;
+            }
+            const stale = (oldLinks || []).filter(r => !wanted.has(r.product_id + '|' + r.category_id));
+            for (const r of stale) {
+              const { error: delErr } = await client.from('product_categories').delete().eq('product_id', r.product_id).eq('category_id', r.category_id);
+              if (delErr) throw delErr;
+            }
+          }
 
           // 4. Product Variants — price/cost_price are direct columns here (no more
           // override-with-fallback-to-parent semantics from the old schema).
@@ -2422,6 +2439,7 @@ window.formatMoney = formatMoney;
                 sku: _vsku(v),
                 price: roundAmt(v.price),
                 cost_price: roundAmt(v.cost),
+                min_stock: roundStock(v.minStock != null ? v.minStock : 5),   // ขั้นต่ำเป็นของแต่ละขนาด (เดิมส่งแค่ของขนาดแรกระดับสินค้า)
                 // (v10) ไม่ส่ง stock_quantity ในการ upsert อีกแล้ว — เดิมเครื่องไหนซิงค์ทีหลังจะเขียนทับสต็อกของเครื่องอื่น
                 // สต็อกเปลี่ยนผ่าน RPC เท่านั้น (create_sale / process_return / receive_goods / adjust_stock / seed)
                 is_active: !p.isDeleted && !p.isDisabled
@@ -3776,6 +3794,17 @@ window.formatMoney = formatMoney;
         if (countEl) countEl.textContent = count;
       };
 
+      // รอให้ข้อมูลสินค้าส่งขึ้นเซิร์ฟเวอร์ก่อน แล้วส่งคิวปรับสต็อก และแจ้งว่ามีรายการที่ยังไม่ผ่านหรือไม่
+      window.finishBulkSync = async function(label) {
+        try { await window.syncProductsToSupabase?.(true); } catch (e) { console.warn('catalog sync after ' + label + ' failed', e); }
+        try { await window.flushSyncQueue?.(); } catch (e) { console.warn('queue flush after ' + label + ' failed', e); }
+        const failed = (db.syncQueue || []).filter(o => o.status === 'failed').length;
+        const pending = (db.syncQueue || []).filter(o => o.status !== 'failed').length;
+        if (failed) window.showAlert?.('ยังส่งไม่ครบ', `${label}: ${failed} รายการส่งไม่สำเร็จ (กดปุ่มซิงค์เพื่อลองใหม่ หรือดูสาเหตุในประวัติกิจกรรม)`, true);
+        else if (pending) window.showToast?.(`${label}: รอส่งอีก ${pending} รายการ`);
+        else window.showToast?.(`${label}: ส่งขึ้นเซิร์ฟเวอร์ครบแล้ว`);
+      };
+
       window.openBulkCategoryModal = function() {
         if (!selectedProductIds.size) return;
         document.getElementById('bulk-cat-count').textContent = selectedProductIds.size;
@@ -3811,7 +3840,7 @@ window.formatMoney = formatMoney;
         window.renderStockTable();
         window.renderSaleHome?.();
         window.showToast?.(`แก้ไขหมวดหมู่สำเร็จ`);
-        window.syncProductsToSupabase?.(true);
+        finishBulkSync('แก้ไขหมวดหมู่');
       };
 
       window.openBulkMinStockModal = function() {
@@ -3861,9 +3890,10 @@ window.formatMoney = formatMoney;
         const val = parseFloat(document.getElementById('bulk-stock-value').value);
         if (isNaN(val)) return window.showAlert?.('ข้อมูลไม่ถูกต้อง', 'กรุณากรอกจำนวน', true);
         const mode = document.querySelector('input[name="bulk-stock-mode"]:checked').value;
-        let changed = 0;
+        let changed = 0, skippedMulti = 0;
         selectedProductIds.forEach(pid => {
           const p = db.products[pid];
+          if (p && (p.variants || []).length > 1) skippedMulti++;
           if (!p || (p.variants || []).length !== 1) return;
           const v = p.variants[0];
           v.stock = mode === 'SET' ? Math.max(0, val) : Math.max(0, roundStock((+v.stock || 0) + val));
@@ -3875,8 +3905,8 @@ window.formatMoney = formatMoney;
         window.clearStockSelection();
         window.renderStockTable();
         window.renderSaleHome?.();
-        window.showToast?.(`ปรับจำนวนคงเหลือสำเร็จ ${changed} รายการ`);
-        window.syncProductsToSupabase?.(true)?.then?.(() => window.flushSyncQueue?.());
+        window.showToast?.(`ปรับจำนวนคงเหลือ ${changed} รายการ` + (skippedMulti ? ` • ข้าม ${skippedMulti} สินค้าหลายขนาด` : ''));
+        finishBulkSync('ปรับจำนวนคงเหลือ');
       };
 
       // ---- Merge selected products into one grouped product (shared with auto-suggestions) ----
@@ -5130,16 +5160,17 @@ window.formatMoney = formatMoney;
             (rawVarsByProduct[p.id]||[]).forEach(rv=>{
               const lv=existing.variants.find(x=>toUUID(x.id)===rv.id);
               if(!lv){
-                existing.variants.push({id:rv.id,sizeName:rv.variant_name||'ปกติ',barcode:rv.barcode||'',sku:rv.sku||'',cost:+(rv.cost_price||0),price:+(rv.price||0),stock:+(rv.stock_quantity||0),_seeded:!!rv.stock_seeded,fractions:[]});
+                existing.variants.push({id:rv.id,minStock:(rv.min_stock!=null?+rv.min_stock:(+p.min_stock_alert||5)),sizeName:rv.variant_name||'ปกติ',barcode:rv.barcode||'',sku:rv.sku||'',cost:+(rv.cost_price||0),price:+(rv.price||0),stock:+(rv.stock_quantity||0),_seeded:!!rv.stock_seeded,fractions:[]});
                 addedVar++;
-              }else if(rv.stock_seeded){
-                lv.stock=+(rv.stock_quantity||0); lv._seeded=true; stockUpd++;
+              }else{
+                if(rv.min_stock!=null) lv.minStock=+rv.min_stock;
+                if(rv.stock_seeded){ lv.stock=+(rv.stock_quantity||0); lv._seeded=true; stockUpd++; }
               }
             });
           }
         }else if(!existingId){
           const remoteVariants=(rawVarsByProduct[p.id]||[]).map(v=>({
-            id:v.id,sizeName:v.variant_name||'ปกติ',barcode:v.barcode||'',sku:v.sku||'',_seeded:!!v.stock_seeded,
+            id:v.id,minStock:(v.min_stock!=null?+v.min_stock:(+p.min_stock_alert||5)),sizeName:v.variant_name||'ปกติ',barcode:v.barcode||'',sku:v.sku||'',_seeded:!!v.stock_seeded,
             cost:+(v.cost_price||0),price:+(v.price||0),stock:+(v.stock_quantity||0),
             fractions:(fracsByVariant[v.id]||[]).map(f=>({
               id:f.id,fractionName:f.fraction_name,
