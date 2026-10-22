@@ -5080,6 +5080,8 @@ window.formatMoney = formatMoney;
     // — e.g. a bad embedded-relationship query — doesn't block every other table from loading,
     // and so the failure message can name exactly which table/column broke instead of a
     // generic "pull failed" with no way to diagnose it.
+    // ตัวช่วย: มีคำสั่งปรับสต็อกของขนาดนี้ที่ยังไม่ได้ส่งขึ้นเซิร์ฟเวอร์หรือไม่
+    const hasPendingAdj = id => (db.syncQueue || []).some(o => o.type === 'adjust' && o.status !== 'failed' && o.payload && o.payload.variantId === id);
     const queries={
       categories:q('categories',x=>x.select('*').order('display_order')),
       products:q('products',x=>x.select('*').eq('is_active',true).order('name')),
@@ -5164,14 +5166,15 @@ window.formatMoney = formatMoney;
                 addedVar++;
               }else{
                 if(rv.min_stock!=null) lv.minStock=+rv.min_stock;
-                if(rv.stock_seeded){ lv.stock=+(rv.stock_quantity||0); lv._seeded=true; stockUpd++; }
+                // อย่าเขียนทับสต็อกที่ยังมีคำสั่งปรับค้างอยู่ในคิว ไม่งั้นการโหลดใหม่จะย้อนค่าที่เพิ่งตั้ง
+                if(rv.stock_seeded && !hasPendingAdj(lv.id)){ lv.stock=+(rv.stock_quantity||0); lv._seeded=true; stockUpd++; }
               }
             });
           }
         }else if(!existingId){
           const remoteVariants=(rawVarsByProduct[p.id]||[]).map(v=>({
             id:v.id,minStock:(v.min_stock!=null?+v.min_stock:(+p.min_stock_alert||5)),sizeName:v.variant_name||'ปกติ',barcode:v.barcode||'',sku:v.sku||'',_seeded:!!v.stock_seeded,
-            cost:+(v.cost_price||0),price:+(v.price||0),stock:+(v.stock_quantity||0),
+            cost:+(v.cost_price||0),price:+(v.price||0),stock:(hasPendingAdj(v.id)?0:+(v.stock_quantity||0)),
             fractions:(fracsByVariant[v.id]||[]).map(f=>({
               id:f.id,fractionName:f.fraction_name,
               fractionMultiplier:f.quantity_ratio>0?roundStock(1/f.quantity_ratio):1,
