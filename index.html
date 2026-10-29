@@ -45,7 +45,7 @@
         });
       })();
     </script>
-    <link class="no-print" rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/10398/10398642.png">
+    <link class="no-print" rel="apple-touch-icon" href="./icon.svg">
     <style>
     /* =============================================================
        Hand-written replacement for the Tailwind CDN Play script.
@@ -6359,6 +6359,8 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
     if (btn) { btn.disabled = true; btn.dataset.originalText = btn.textContent; btn.textContent = 'กำลังบันทึกปิดกะ…'; }
     try {
       if (typeof window.ensureShiftForClose !== 'function') throw new Error('ยังไม่ได้เปิดใช้ตัวเชื่อมต่อกะกับ Supabase');
+      const _txOk = await window.syncTransactionsToSupabase(true);
+      if (_txOk === false) throw new Error('ซิงค์รายการเงินเข้า-ออกลิ้นชักก่อนปิดกะไม่สำเร็จ');
       const shiftUuid = await window.ensureShiftForClose(s.id);
       const { data, error } = await c.rpc('close_shift', {
         p_shift_id: shiftUuid,
@@ -7268,7 +7270,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
   }
   window._shiftRow = function (s) {
     return {
-      id: toUUID(s.id), user_id: (s.userId || db.activeUser?.id) ? toUUID(s.userId || db.activeUser.id) : null,
+      id: toUUID(s.id), opened_by: (s.userId || db.activeUser?.id) ? toUUID(s.userId || db.activeUser.id) : null,
       opened_at: new Date(s.startTime).toISOString(),
       closed_at: s.endTime ? new Date(s.endTime).toISOString() : null,
       opening_cash: roundAmt(s.openingCash), closing_cash: s.cashOnHand != null ? roundAmt(s.cashOnHand) : null,
@@ -7389,7 +7391,8 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
       p_items: items,
       p_allow_negative: !window.isPreventNegativeStock(),
       p_tax_mode: 'NONE',
-      p_expected_total: +bill.total
+      p_expected_total: +bill.total,
+      p_created_at: (bill.time ? new Date(bill.time).toISOString() : null)
     });
     if (error) throw error;
     bill._syncedViaRPC = true; delete bill._rpcPending;
@@ -7450,7 +7453,8 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
     });
     const { data, error } = await c.rpc('receive_goods', {
       p_client_ref: r.id, p_supplier_id: toUUID(r.supplierId), p_doc_ref: r.docRef || null,
-      p_terms: r.terms || 30, p_received_at: r.receivedAt || null, p_items: items
+      p_terms: r.terms || 30, p_received_at: r.receivedAt || null, p_items: items,
+      p_ap_id: p.apId ? toUUID(p.apId) : null
     });
     if (error) throw error;
     const ap = (db.cashLedger || []).find(x => x.id === p.apId);
@@ -7489,8 +7493,15 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
           const { data: actor, error: actorError } = await c.from('app_users')
             .select('id,auth_user_id,is_active').eq('auth_user_id', authUserData.user.id).maybeSingle();
           if (actorError) throw new Error('ตรวจสอบบัญชีผู้ทำรายการไม่สำเร็จ: ' + actorError.message);
-          if (!actor || actor.is_active !== true || actor.id !== op.actorAppUserId) {
-            throw new Error('บัญชีที่เข้าสู่ระบบไม่ตรงกับผู้ทำรายการในคิว ระบบหยุดซิงค์เพื่อป้องกันการสวมสิทธิ์');
+          if (!actor || actor.is_active !== true) {
+            throw new Error('บัญชีที่เข้าสู่ระบบยังไม่ได้รับสิทธิ์ใช้งาน (ไม่พบใน app_users)');
+          }
+          if (actor.id !== op.actorAppUserId) {
+            // เครื่องหน้าร้านล็อกอินด้วยบัญชีเจ้าของ/ผู้จัดการ แล้วพนักงานใช้ PIN: ผู้ทำรายการต้องเป็นพนักงาน active ในฐานข้อมูล
+            const { data: opActor, error: opErr } = await c.from('app_users').select('id,is_active').eq('id', op.actorAppUserId).maybeSingle();
+            if (opErr || !opActor || opActor.is_active !== true) {
+              throw new Error('ไม่พบพนักงานผู้ทำรายการบนเซิร์ฟเวอร์ (ต้องใช้บัญชีเจ้าของ/ผู้จัดการล็อกอินที่เครื่องนี้ และซิงค์รายชื่อพนักงานก่อน)');
+            }
           }
         } catch (actorCheckError) {
           op.lastError = errMsg(actorCheckError);

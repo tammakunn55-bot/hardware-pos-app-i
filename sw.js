@@ -1,7 +1,19 @@
 // Service worker: ให้แอปเปิดได้แม้ไม่มีอินเทอร์เน็ต (วางไฟล์นี้ไว้โฟลเดอร์เดียวกับ index.html)
-const V = 'pos-v11';
-const SHELL = ['./', 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js'];
-self.addEventListener('install', e => e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));
+// เปลี่ยนเลข V ทุกครั้งที่แก้ index.html / รายการไลบรารี เพื่อให้เครื่องหน้าร้านโหลดเวอร์ชันใหม่
+const V = 'pos-v12';
+// ต้องตรงกับ URL ใน <script src> ของ index.html ทุกตัว (ไม่งั้นเปิดออฟไลน์ครั้งแรกไม่ได้)
+const SHELL = [
+  './', './manifest.webmanifest', './icon.svg',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4',
+  'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+  'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'
+];
+// เก็บทีละไฟล์: ถ้าไฟล์ไหนโหลดไม่ได้ ไม่ทำให้การติดตั้ง service worker ล้มทั้งชุด
+self.addEventListener('install', e => e.waitUntil(
+  caches.open(V).then(c => Promise.all(SHELL.map(u => c.add(u).catch(err => console.warn('precache skip', u, err)))))
+    .then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(
   caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {
