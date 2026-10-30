@@ -1960,7 +1960,7 @@ window.formatMoney = formatMoney;
         btn.disabled = false;
         btn.innerText = "🚀 เริ่มจับคู่และนำเข้ารูปภาพ";
         window.persist?.();
-        window.syncProductsToSupabase?.(true);   // ส่ง image_url ขึ้นเซิร์ฟเวอร์ให้เครื่องอื่นเห็นรูปด้วย
+        await window.syncProductsToSupabase?.(true);   // รอให้บันทึก image_url ขึ้น Cloud ก่อนรายงานว่าสำเร็จ
         window.closeModal('modal-bulk-image');
         window.renderStockTable();
         window.renderSaleHome?.();
@@ -5158,10 +5158,24 @@ window.formatMoney = formatMoney;
   };
 
   function sb(){ return window.getSupabase ? window.getSupabase() : null; }
+  // อ่านข้อมูล Cloud แบบแบ่งหน้าเสมอ เพราะ PostgREST จำกัดจำนวนแถวต่อคำขอ
+  // ค่าเริ่มต้นมักอยู่ที่ 1,000 แถว การ select ครั้งเดียวจึงทำให้สินค้า/บิลหลังแถวที่ 1,000 หาย
+  // fn ต้องสร้าง query ใหม่ทุกครั้ง และ query ที่ส่งเข้ามาต้องมี order ที่คงที่
   async function q(table, fn){
     const c=sb(); if(!c) return null;
-    const r=fn(c.from(table)); if(r && typeof r.then==='function'){ const {data,error}=await r; if(error) throw error; return data; }
-    return r;
+    const PAGE_SIZE=1000, MAX_ROWS=250000;
+    const first=fn(c.from(table));
+    if(!first || typeof first.then!=='function') return first;
+    const all=[]; let offset=0;
+    while(offset<MAX_ROWS){
+      const query = offset===0 ? first : fn(c.from(table));
+      const {data,error}=await query.range(offset, offset+PAGE_SIZE-1);
+      if(error) throw error;
+      const rows=data||[]; all.push(...rows);
+      if(rows.length<PAGE_SIZE) return all;
+      offset+=rows.length;
+    }
+    throw new Error(`ตาราง ${table} มีข้อมูลเกิน ${MAX_ROWS.toLocaleString()} แถว ระบบหยุดเพื่อป้องกันการโหลดไม่ครบโดยไม่แจ้งเตือน`);
   }
   // BUG FIX: this used to run automatically on every page load (50ms after DOMContentLoaded)
   // and would silently wipe out db.products with whatever Supabase returned — including an
@@ -5181,13 +5195,13 @@ window.formatMoney = formatMoney;
     // ตัวช่วย: มีคำสั่งปรับสต็อกของขนาดนี้ที่ยังไม่ได้ส่งขึ้นเซิร์ฟเวอร์หรือไม่
     const hasPendingAdj = id => (db.syncQueue || []).some(o => o.type === 'adjust' && o.status !== 'failed' && o.payload && o.payload.variantId === id);
     const queries={
-      categories:q('categories',x=>x.select('*').order('display_order')),
-      products:q('products',x=>x.select('*').eq('is_active',true).order('name')),
-      product_categories:q('product_categories',x=>x.select('*')),
-      product_variants:q('product_variants_view',x=>x.select('*').eq('is_active',true)),
-      product_fractions:q('product_fractions',x=>x.select('*')),
-      customers:q('customers',x=>x.select('*').eq('is_active',true).order('name')),
-      bills:q('bills',x=>x.select('*, bill_items(*)').order('created_at',{ascending:false}).limit(1000))
+      categories:q('categories',x=>x.select('*').order('display_order').order('id')),
+      products:q('products',x=>x.select('*').eq('is_active',true).order('name').order('id')),
+      product_categories:q('product_categories',x=>x.select('*').order('product_id').order('category_id')),
+      product_variants:q('product_variants_view',x=>x.select('*').eq('is_active',true).order('id')),
+      product_fractions:q('product_fractions',x=>x.select('*').order('variant_id').order('id')),
+      customers:q('customers',x=>x.select('*').eq('is_active',true).order('name').order('id')),
+      bills:q('bills',x=>x.select('*, bill_items(*)').order('created_at',{ascending:false}).order('id',{ascending:false}))
     };
     const keys=Object.keys(queries);
     const settled=await Promise.allSettled(Object.values(queries));
@@ -7952,14 +7966,14 @@ window.__headerTips={TIPS:TIPS};
       };
 
       async function fetchAll(makeQuery, maxPages) {
-        var out = [], page = 1000;
-        for (var i = 0; i < (maxPages || 30); i++) {
+        var out = [], page = 1000, max = Math.max(1, Number(maxPages) || 250);
+        for (var i = 0; i < max; i++) {
           var r = await makeQuery().range(i * page, i * page + page - 1);
           if (r.error) throw r.error;
-          out = out.concat(r.data || []);
-          if (!r.data || r.data.length < page) break;
+          var rows = r.data || []; out = out.concat(rows);
+          if (rows.length < page) return out;
         }
-        return out;
+        throw new Error('รายงานมีข้อมูลเกินขีดจำกัด ' + (max * page).toLocaleString('th-TH') + ' แถว กรุณาจำกัดช่วงวันที่');
       }
 
       function row(label, value, cls) {

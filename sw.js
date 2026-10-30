@@ -1,6 +1,6 @@
 // Service worker: ให้แอปเปิดได้แม้ไม่มีอินเทอร์เน็ต (วางไฟล์นี้ไว้โฟลเดอร์เดียวกับ index.html)
 // เปลี่ยนเลข V ทุกครั้งที่แก้ index.html / รายการไลบรารี เพื่อให้เครื่องหน้าร้านโหลดเวอร์ชันใหม่
-const V = 'pos-v16';
+const V = 'pos-v17';
 // ต้องตรงกับ URL ใน <script src> ของ index.html ทุกตัว (ไม่งั้นเปิดออฟไลน์ครั้งแรกไม่ได้)
 const SHELL = [
   './', './manifest.webmanifest', './icon.svg',
@@ -26,11 +26,20 @@ self.addEventListener('fetch', e => {
       .catch(() => caches.match('./')));
     return;
   }
-  if (r.destination === 'image' || u.pathname.includes('/storage/')) {       // รูปสินค้า: ใช้ cache เดิมทันทีและอัปเดต cache จากเครือข่ายสำหรับการเปิดครั้งถัดไป
-    e.respondWith(caches.open(V).then(c => c.match(r).then(m => {
-      const net = fetch(r).then(res => { c.put(r, res.clone()); return res; }).catch(() => m);
-      return m || net;
-    })));
+  if (u.hostname.endsWith('.supabase.co') && u.pathname.includes('/storage/')) {
+    // รูปจาก Supabase ใช้ network-first เพื่อให้รูปที่เปลี่ยนใหม่ไม่ค้างจาก cache;
+    // หากออฟไลน์จึง fallback ไปใช้รูปที่เคย cache ไว้
+    e.respondWith(caches.open(V).then(c => fetch(r).then(res => {
+      if (res && res.ok) c.put(r, res.clone());
+      return res;
+    }).catch(() => c.match(r))));
+    return;
+  }
+  if (r.destination === 'image') {
+    e.respondWith(caches.open(V).then(c => c.match(r).then(m => m || fetch(r).then(res => {
+      if (res && res.ok) c.put(r, res.clone());
+      return res;
+    }))));
     return;
   }
   e.respondWith(caches.match(r).then(m => m || fetch(r).then(res => { const cp = res.clone(); caches.open(V).then(c => c.put(r, cp)); return res; })));
