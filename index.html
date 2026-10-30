@@ -1904,6 +1904,8 @@ window.formatMoney = formatMoney;
         progressWrap.classList.remove('hidden');
 
         let successCount = 0;
+        let cloudCount = 0;
+        let localOnlyCount = 0;
         let skippedNoUpload = 0;
         let processedCount = 0;
         const client = window.getSupabaseClient();
@@ -1928,15 +1930,14 @@ window.formatMoney = formatMoney;
             try {
               const path = `product-${p.id}-${Date.now()}.${file.name.split('.').pop()}`;
               const { error: upErr } = await client.storage.from('product-images').upload(path, file, { upsert: true });
-              if (!upErr) {
-                const { data } = client.storage.from('product-images').getPublicUrl(path);
-                publicUrl = data.publicUrl;
-              }
-            } catch (e) {}
+              if (upErr) throw upErr;
+              const { data } = client.storage.from('product-images').getPublicUrl(path);
+              publicUrl = data.publicUrl;
+            } catch (e) { console.warn('product image upload failed', p.id, e); }
           }
 
           if (publicUrl) {
-            p.imageUrl = publicUrl;
+            p.imageUrl = publicUrl; cloudCount++;
           } else if (entries.length > 30) {
             skippedNoUpload++; continue;   // รูปจำนวนมากเก็บเป็น base64 ในเครื่องไม่ได้ (เกินโควตา 5MB ทำให้ข้อมูลหาย) ต้องอัปโหลดขึ้น Supabase เท่านั้น
           } else {
@@ -1951,8 +1952,9 @@ window.formatMoney = formatMoney;
               reader.onerror = () => resolve('');
               reader.readAsDataURL(file);
             });
+            if (p.imageUrl) localOnlyCount++; else { skippedNoUpload++; continue; }
           }
-          successCount++;
+          if (p.imageUrl) successCount++;
         }
 
         btn.disabled = false;
@@ -1962,7 +1964,7 @@ window.formatMoney = formatMoney;
         window.closeModal('modal-bulk-image');
         window.renderStockTable();
         window.renderSaleHome?.();
-        window.showAlert("นำเข้ารูปภาพเรียบร้อย", `จับคู่และอัปโหลดรูปภาพสำเร็จ ${successCount} รายการ จากทั้งหมด ${entries.length} รายการ` + (skippedNoUpload ? ` — ข้าม ${skippedNoUpload} รายการที่อัปโหลดขึ้น Supabase ไม่สำเร็จ (ตรวจการเชื่อมต่อ/สิทธิ์ แล้วทำซ้ำได้ รายการที่สำเร็จแล้วจะถูกอัปโหลดใหม่ทับ)` : ''), skippedNoUpload > 0);
+        window.showAlert("สรุปการนำเข้ารูปภาพ", `จับคู่ได้ ${successCount}/${entries.length} รายการ\nอัปโหลดขึ้น Supabase สำเร็จ ${cloudCount} รายการ\nเก็บไว้เฉพาะเครื่องนี้ ${localOnlyCount} รายการ (อุปกรณ์อื่นยังไม่เห็นรูป)\nข้าม/อ่านไฟล์ไม่สำเร็จ ${skippedNoUpload} รายการ` + (skippedNoUpload ? `\n\nตรวจสอบการเชื่อมต่อและสิทธิ์ Storage แล้วลองนำเข้าเฉพาะรายการที่ยังขาด` : ''), skippedNoUpload > 0 || localOnlyCount > 0);
       };
 
       // ==========================================
@@ -2406,7 +2408,7 @@ window.formatMoney = formatMoney;
             id: toUUID(p.id),
             sku: p.code || p.id,
             name: p.name,
-            image_url: p.imageUrl || null,
+            image_url: (typeof p.imageUrl === 'string' && /^https?:\/\//i.test(p.imageUrl)) ? p.imageUrl : null,
             min_stock_alert: roundStock((p.variants && p.variants[0] && p.variants[0].minStock) || 5),
             is_active: !p.isDeleted && !p.isDisabled
           }));
@@ -4659,10 +4661,11 @@ window.formatMoney = formatMoney;
             const { error } = await client.storage.from('product-images').upload(path, blob, { contentType: blob.type, upsert: true });
             if (error) throw error;
             const { data } = client.storage.from('product-images').getPublicUrl(path);
-            const p = db.products[g.pid]; if (p) p.imageUrl = data.publicUrl;
+            const p = db.products[g.pid]; if (!p) throw new Error('ไม่พบสินค้าในเครื่องหลังอัปโหลดรูป'); p.imageUrl = data.publicUrl;
             out.ok++;
           } catch (err) { console.warn('photo upload failed', g.name, err); out.fail++; }
         }
+        if (out.ok) window.persist?.();
         return out;
       }
 
@@ -6948,8 +6951,12 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
     if (noCost.length) issues.push({ level: 'info', title: 'ขนาดที่ยังไม่มีราคาทุน (กำไรในรายงานจะเกินจริง)', count: noCost.length, detail: noCost.slice(0, 50).join(', ') });
 
     // 4c) รายการรอส่งขึ้นเซิร์ฟเวอร์ที่ค้างอยู่
-    const pendingSync = (db.syncQueue || []).length;
-    if (pendingSync) issues.push({ level: 'warn', title: 'รายการที่ยังไม่ได้ส่งขึ้นเซิร์ฟเวอร์ (รอเน็ต/รอซิงก์)', count: pendingSync, detail: 'ข้อมูลยังอยู่ในเครื่องนี้ เมื่อเน็ตกลับมาระบบจะส่งให้เอง ห้ามล้างข้อมูลเบราว์เซอร์ก่อนส่งเสร็จ' });
+    const pendingSync = (db.syncQueue || []).filter(o => !['failed','needs_review'].includes(o.status)).length;
+    const reviewSync = (db.syncQueue || []).filter(o => o.status === 'needs_review').length;
+    const failedSync = (db.syncQueue || []).filter(o => o.status === 'failed').length;
+    if (pendingSync) issues.push({ level: 'warn', title: 'รายการที่รอส่งขึ้นเซิร์ฟเวอร์', count: pendingSync, detail: 'รายการใหม่ที่ยังรอส่งตามปกติ' });
+    if (reviewSync) issues.push({ level: 'warn', title: 'คิวเก่าที่ต้องตรวจสอบผู้ทำรายการ', count: reviewSync, detail: 'ยังไม่ส่งขึ้นเซิร์ฟเวอร์เพื่อป้องกันการลงบัญชีผิดคน ห้ามลบจนกว่าจะตรวจสอบรายการ' });
+    if (failedSync) issues.push({ level: 'error', title: 'รายการซิงก์ที่ส่งไม่ผ่าน', count: failedSync, detail: 'เปิดป้ายสถานะซิงก์เพื่อดูสาเหตุและแก้ไขก่อนลองใหม่' });
 
     // 5) บิลที่มียอดเงินแต่ไม่มีรายการสินค้า — ร่องรอยข้อมูลเพี้ยน/เขียนไม่สมบูรณ์ตอน sync หรือ persist ล้มเหลว
     const emptyBills = (db.bills || []).filter(b => (!b.items || !b.items.length) && (+b.total || 0) > 0);
@@ -7330,7 +7337,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
 
   window.syncQueueStats = function () {
     const q = (window.db && db.syncQueue) || [];
-    return { pending: q.filter(o => o.status !== 'failed').length, failed: q.filter(o => o.status === 'failed').length };
+    return { pending: q.filter(o => !['failed','needs_review'].includes(o.status)).length, failed: q.filter(o => o.status === 'failed').length, needsReview: q.filter(o => o.status === 'needs_review').length };
   };
 
   window.describeSyncFailures = function () {
@@ -7344,11 +7351,12 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
     const s = window.syncQueueStats();
     const el = document.getElementById('sync-queue-badge');
     if (!el) return;
-    if (!s.pending && !s.failed) { el.classList.add('hidden'); return; }
+    if (!s.pending && !s.failed && !s.needsReview) { el.classList.add('hidden'); return; }
     el.classList.remove('hidden');
-    el.textContent = s.failed ? `⚠️ ส่งไม่ผ่าน ${s.failed}` + (s.pending > 0 ? ` • รอส่ง ${s.pending}` : '') : `⏳ รอส่ง ${s.pending}`;
-    el.className = 'text-[10px] font-bold px-2 py-1 rounded-lg ' + (s.failed ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700');
-    el.onclick = () => { if (s.failed) window.showAlert && window.showAlert('รายการที่ซิงค์ไม่ผ่าน', window.describeSyncFailures() + '\n\nกด "ซิงค์ตอนนี้" เพื่อลองส่งใหม่หลังแก้สาเหตุ', true); };
+    const parts = []; if (s.needsReview) parts.push(`ต้องตรวจสอบ ${s.needsReview}`); if (s.failed) parts.push(`ส่งไม่ผ่าน ${s.failed}`); if (s.pending) parts.push(`รอส่ง ${s.pending}`);
+    el.textContent = parts.join(' • ');
+    el.className = 'text-[10px] font-bold px-2 py-1 rounded-lg ' + ((s.failed || s.needsReview) ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700');
+    el.onclick = () => { if (s.failed || s.needsReview) { const review = (db.syncQueue || []).filter(o => o.status === 'needs_review').map(o => `• ${o.type || 'รายการ'} ${o.id}: ${o.lastError || 'ต้องตรวจสอบผู้ทำรายการ'}`).join('\n'); window.showAlert && window.showAlert('รายการซิงก์ที่ต้องตรวจสอบ', (review ? 'รายการเก่าที่ไม่มีผู้ทำรายการยืนยัน (ยังไม่ส่ง):\n' + review + '\n\n' : '') + (window.describeSyncFailures() || 'ไม่มีรายการที่ส่งไม่ผ่าน'), true); } };
   };
 
   // ---------- ตัวช่วยบนเซิร์ฟเวอร์ ----------
@@ -7582,7 +7590,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
         // A browser PIN selection is not a Supabase identity; require the current Auth session
         // to map to the same active app_users row as the actor captured when the operation began.
         try {
-          if (!op.actorAppUserId) throw new Error('รายการคิวเก่าไม่มีข้อมูลผู้ทำรายการ จึงหยุดซิงค์เพื่อป้องกันการบันทึกผิดบัญชี กรุณาตรวจสอบรายการก่อนส่งใหม่');
+          if (!op.actorAppUserId) { op.lastError = 'คิวเดิมไม่มีข้อมูลผู้ทำรายการ จึงพักไว้เพื่อป้องกันการบันทึกผิดบัญชี'; op.status = 'needs_review'; if (window.persist) window.persist(); continue; }
           const { data: authUserData, error: authUserError } = await c.auth.getUser();
           if (authUserError || !authUserData?.user) throw new Error('ตรวจสอบตัวตน Supabase ไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่');
           const { data: actor, error: actorError } = await c.from('app_users')
@@ -7648,7 +7656,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
 
   // ลองส่งเมื่อกลับมาออนไลน์ และทุก 60 วินาที
   window.addEventListener('online', () => window.flushSyncQueue());
-  setInterval(() => { if (navigator.onLine !== false && (db.syncQueue || []).some(o => o.status !== 'failed')) window.flushSyncQueue().catch(e => console.warn('Background sync deferred:', errMsg(e))); }, 60000);
+  setInterval(() => { if (navigator.onLine !== false && (db.syncQueue || []).some(o => !['failed','needs_review'].includes(o.status))) window.flushSyncQueue().catch(e => console.warn('Background sync deferred:', errMsg(e))); }, 60000);
 
   // ---------- PIN: PBKDF2 + salt, จำกัดจำนวนครั้งที่ลองผิด ----------
   const hex = (u8) => Array.from(u8).map(b => b.toString(16).padStart(2, '0')).join('');

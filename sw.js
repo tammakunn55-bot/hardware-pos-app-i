@@ -1,6 +1,6 @@
 // Service worker: ให้แอปเปิดได้แม้ไม่มีอินเทอร์เน็ต (วางไฟล์นี้ไว้โฟลเดอร์เดียวกับ index.html)
 // เปลี่ยนเลข V ทุกครั้งที่แก้ index.html / รายการไลบรารี เพื่อให้เครื่องหน้าร้านโหลดเวอร์ชันใหม่
-const V = 'pos-v15';
+const V = 'pos-v16';
 // ต้องตรงกับ URL ใน <script src> ของ index.html ทุกตัว (ไม่งั้นเปิดออฟไลน์ครั้งแรกไม่ได้)
 const SHELL = [
   './', './manifest.webmanifest', './icon.svg',
@@ -26,7 +26,7 @@ self.addEventListener('fetch', e => {
       .catch(() => caches.match('./')));
     return;
   }
-  if (r.destination === 'image' || u.pathname.includes('/storage/')) {       // รูปสินค้า: แสดงของเก่าก่อนแล้วอัปเดตเงียบๆ
+  if (r.destination === 'image' || u.pathname.includes('/storage/')) {       // รูปสินค้า: ใช้ cache เดิมทันทีและอัปเดต cache จากเครือข่ายสำหรับการเปิดครั้งถัดไป
     e.respondWith(caches.open(V).then(c => c.match(r).then(m => {
       const net = fetch(r).then(res => { c.put(r, res.clone()); return res; }).catch(() => m);
       return m || net;
