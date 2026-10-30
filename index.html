@@ -24,6 +24,7 @@
       (function () {
         var errors = [];
         function renderBox() {
+          if (!/[?&]debug=1(&|$)/.test(location.search)) return;   // พนักงานไม่ต้องเห็น (เปิดดูได้ด้วย ?debug=1)
           var box = document.getElementById('debug-error-box');
           if (!box) {
             box = document.createElement('div');
@@ -996,6 +997,14 @@ img, video { max-width: 100%; height: auto; }
               <label class="font-bold text-slate-600 block mb-1">ระยะเวลาเครดิต (วัน)</label>
               <input type="number" id="po-credit-terms" value="30" class="w-full bg-slate-50 border p-2.5 rounded-xl font-bold text-slate-800 outline-none">
             </div>
+            <div>
+              <label class="font-bold text-slate-600 block mb-1">การชำระค่าสินค้า</label>
+              <select id="po-pay-mode" class="w-full bg-slate-50 border p-2.5 rounded-xl font-bold text-slate-800 outline-none">
+                <option value="CREDIT">ยังไม่จ่าย (ตั้งเจ้าหนี้ตามเครดิต)</option>
+                <option value="CASH">จ่ายสดจากลิ้นชักเงินสดในกะนี้</option>
+                <option value="PAID">จ่ายแล้ว (โอน/วิธีอื่น ไม่ผ่านลิ้นชัก)</option>
+              </select>
+            </div>
           </div>
 
           <div class="border-t pt-3">
@@ -1078,6 +1087,30 @@ img, video { max-width: 100%; height: auto; }
           <input type="text" id="ar-bills-search" oninput="window.renderSalesAR()" placeholder="🔍 ค้นเลขที่บิล / ชื่อลูกค้า..." class="w-full bg-slate-50 border p-2.5 rounded-xl text-xs font-bold outline-none mb-3">
           <div id="ar-bills-list" class="space-y-2"></div>
         </div>
+      </section>
+
+      <!-- VIEW: รายงานยอดขาย/กำไร/ลูกหนี้/เจ้าหนี้ (ดึงจากฐานข้อมูลกลาง ต้องออนไลน์) -->
+      <section id="view-report" class="view-content hidden fade-in space-y-4">
+        <h3 class="text-xl font-extrabold text-slate-800">📊 รายงานร้านค้า</h3>
+        <div class="bg-white p-4 rounded-3xl border shadow-sm space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="font-bold text-slate-600 block mb-1 text-xs">ตั้งแต่วันที่</label>
+              <input type="date" id="report-from" class="w-full border p-2.5 rounded-xl font-bold outline-none text-xs">
+            </div>
+            <div>
+              <label class="font-bold text-slate-600 block mb-1 text-xs">ถึงวันที่</label>
+              <input type="date" id="report-to" class="w-full border p-2.5 rounded-xl font-bold outline-none text-xs">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <button onclick="window.setReportRange('today')" class="py-2 bg-slate-100 rounded-xl font-bold text-xs btn-touch">วันนี้</button>
+            <button onclick="window.setReportRange('7d')" class="py-2 bg-slate-100 rounded-xl font-bold text-xs btn-touch">7 วันล่าสุด</button>
+            <button onclick="window.setReportRange('month')" class="py-2 bg-slate-100 rounded-xl font-bold text-xs btn-touch">เดือนนี้</button>
+            <button onclick="window.renderReport()" class="py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs btn-touch">🔄 แสดงรายงาน</button>
+          </div>
+        </div>
+        <div id="report-body" class="space-y-4"></div>
       </section>
 
       <!-- MODAL: RECEIVE CUSTOMER PAYMENT (รับชำระหนี้) -->
@@ -1354,6 +1387,20 @@ img, video { max-width: 100%; height: auto; }
                   <input type="checkbox" id="set-prevent-negative" class="mt-1 w-4 h-4">
                   <span><b class="text-slate-700">ป้องกันสต็อกติดลบ</b><br><span class="text-xs text-slate-500">ไม่ให้ขายเกินจำนวนคงเหลือ (ทั้งที่เครื่องและบนเซิร์ฟเวอร์) — ถ้ายังไม่ได้กรอกยอดยกมา ให้ปิดไว้ก่อน ไม่งั้นขายสินค้าที่สต็อก 0 ไม่ได้</span></span>
                 </label>
+                <label class="flex items-start gap-2 text-sm bg-amber-50 border border-amber-200 rounded-xl p-3 cursor-pointer">
+                  <input type="checkbox" id="set-vat-registered" class="mt-1 w-4 h-4">
+                  <span><b class="text-slate-700">จดทะเบียนภาษีมูลค่าเพิ่ม (VAT)</b><br><span class="text-xs text-slate-500">ราคาขายทุกรายการ "รวม VAT แล้ว" — ระบบจะแยกภาษีออกจากยอดขาย และพิมพ์ใบกำกับภาษีอย่างย่อบนใบเสร็จ (ต้องกรอกเลขประจำตัวผู้เสียภาษีด้านบนด้วย)</span></span>
+                </label>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="font-bold text-slate-600 block mb-1">อัตรา VAT (%)</label>
+                    <input type="number" id="set-vat-rate" step="0.01" min="0" max="30" class="w-full border p-2.5 rounded-xl font-bold outline-none">
+                  </div>
+                  <div>
+                    <label class="font-bold text-slate-600 block mb-1">สถานประกอบการ</label>
+                    <input type="text" id="set-vat-branch" placeholder="สำนักงานใหญ่ หรือ สาขา 00001" class="w-full border p-2.5 rounded-xl font-bold outline-none">
+                  </div>
+                </div>
                 <button onclick="window.saveStoreSettings()" class="py-3 px-6 bg-indigo-600 text-white font-bold rounded-xl btn-touch">บันทึกข้อมูลร้านค้า</button>
               </div>
             </div>
@@ -1670,6 +1717,10 @@ img, video { max-width: 100%; height: auto; }
       <button onclick="window.showView('history')" class="flex flex-col items-center w-full opacity-40 nav-btn-el btn-touch" data-view="history">
         <span class="text-2xl">🧾</span>
         <span class="text-[10px] font-extrabold mt-1">ขาย/ลูกหนี้</span>
+      </button>
+      <button onclick="window.showView('report')" class="flex flex-col items-center w-full opacity-40 nav-btn-el btn-touch" data-view="report">
+        <span class="text-2xl">📊</span>
+        <span class="text-[10px] font-extrabold mt-1">รายงาน</span>
       </button>
     </nav>
 
@@ -3408,6 +3459,12 @@ window.formatMoney = formatMoney;
           // ทันทีตอนขาย ให้เป็น source of truth เดียวสำหรับทุกจุดที่ sync ขึ้น Supabase
           shiftId: db.currentShift?.id || null
         };
+        if (db.settings && db.settings.vatRegistered && +db.settings.vatRate > 0) {
+          const _vr = +db.settings.vatRate;
+          bill.taxMode = 'INCLUDED'; bill.vatRate = _vr;
+          bill.vatAmount = roundAmt(total * _vr / (100 + _vr));      // ภาษีที่รวมอยู่ในยอด
+          bill.vatBase = roundAmt(total - bill.vatAmount);            // มูลค่าก่อนภาษี
+        } else { bill.taxMode = 'NONE'; bill.vatAmount = 0; }
 
         db.bills.push(bill);
 
@@ -3577,8 +3634,10 @@ window.formatMoney = formatMoney;
         const html = `
           <div class="space-y-3 p-4 border rounded-xl bg-white max-w-sm mx-auto text-slate-800">
             <div class="text-center">
+              ${bill.taxMode === 'INCLUDED' ? '<p class="text-xs font-black">ใบกำกับภาษีอย่างย่อ</p>' : ''}
               <h2 class="text-base font-bold">${escapeHTML(db.storeName)}</h2>
               <p class="text-[10px] text-slate-500">${escapeHTML(db.storeAddress)}</p>
+              ${bill.taxMode === 'INCLUDED' ? `<p class="text-[10px] text-slate-500">เลขประจำตัวผู้เสียภาษี ${escapeHTML(db.taxId || '-')} • ${escapeHTML((db.settings && db.settings.vatBranch) || 'สำนักงานใหญ่')}</p>` : ''}
               <div class="border-b my-2"></div>
             </div>
             <div class="text-[10px] space-y-0.5">
@@ -3592,7 +3651,8 @@ window.formatMoney = formatMoney;
             </div>
             ${itemsHtml}
             <div class="mt-3 text-right text-xs border-t pt-2 font-bold text-indigo-600">
-              <div class="flex justify-between text-sm"><span>ยอดรวมสุทธิ:</span><span>${formatMoney(bill.total)}</span></div>
+              ${bill.taxMode === 'INCLUDED' ? `<div class="flex justify-between text-[11px] text-slate-600 font-normal"><span>มูลค่าก่อนภาษี:</span><span>${formatMoney(bill.vatBase)}</span></div><div class="flex justify-between text-[11px] text-slate-600 font-normal"><span>ภาษีมูลค่าเพิ่ม ${bill.vatRate}%:</span><span>${formatMoney(bill.vatAmount)}</span></div>` : ''}
+              <div class="flex justify-between text-sm"><span>ยอดรวมสุทธิ${bill.taxMode === 'INCLUDED' ? ' (รวม VAT)' : ''}:</span><span>${formatMoney(bill.total)}</span></div>
             </div>
             ${returnsHtml}
           </div>
@@ -3873,12 +3933,13 @@ window.formatMoney = formatMoney;
       // (ข้ามให้อัตโนมัติพร้อมแจ้งเตือนจำนวนที่ข้าม แทนที่จะเดาเอาเองแล้วพลาด)
       window.openBulkStockModal = function() {
         if (!selectedProductIds.size) return;
-        const eligible = Array.from(selectedProductIds).filter(pid => (db.products[pid]?.variants || []).length === 1);
-        const skipped = selectedProductIds.size - eligible.length;
-        document.getElementById('bulk-stock-count').textContent = eligible.length;
+        const prods = Array.from(selectedProductIds).map(pid => db.products[pid]).filter(p => p && (p.variants || []).length > 0);
+        const variantCount = prods.reduce((n, p) => n + p.variants.length, 0);
+        const groupCount = prods.filter(p => p.variants.length > 1).length;
+        document.getElementById('bulk-stock-count').textContent = prods.length;
         const note = document.getElementById('bulk-stock-skip-note');
-        if (skipped > 0) {
-          note.textContent = `⚠️ ข้าม ${skipped} รายการที่เป็นสินค้ากลุ่ม (มีหลายขนาด/สี) — ปรับจำนวนของสินค้ากลุ่มได้ที่หน้าแก้ไขสินค้าแต่ละชิ้นแทน`;
+        if (groupCount > 0) {
+          note.textContent = `ℹ️ มีสินค้ากลุ่ม ${groupCount} รายการ (หลายขนาด/สี) — ค่าที่กรอกจะใช้กับ "ทุกขนาด" ในกลุ่ม รวมทั้งหมด ${variantCount} ตัวเลือก`;
           note.classList.remove('hidden');
         } else note.classList.add('hidden');
         document.getElementById('bulk-stock-value').value = '';
@@ -3890,22 +3951,29 @@ window.formatMoney = formatMoney;
         const val = parseFloat(document.getElementById('bulk-stock-value').value);
         if (isNaN(val)) return window.showAlert?.('ข้อมูลไม่ถูกต้อง', 'กรุณากรอกจำนวน', true);
         const mode = document.querySelector('input[name="bulk-stock-mode"]:checked').value;
-        let changed = 0, skippedMulti = 0;
+        let changedVariants = 0, changedProducts = 0, seq = 0;
+        const stamp = Date.now();
         selectedProductIds.forEach(pid => {
           const p = db.products[pid];
-          if (p && (p.variants || []).length > 1) skippedMulti++;
-          if (!p || (p.variants || []).length !== 1) return;
-          const v = p.variants[0];
-          v.stock = mode === 'SET' ? Math.max(0, val) : Math.max(0, roundStock((+v.stock || 0) + val));
-          changed++;
-          window.enqueueSync({ type: 'adjust', payload: { variantId: v.id, value: v.stock, reason: 'ปรับจำนวนหลายรายการ', opRef: 'ADJ-' + Date.now() + '-' + window.getDeviceId() + '-' + changed } }, true);
+          if (!p || !(p.variants || []).length) return;
+          // สินค้ากลุ่ม (หลายขนาด/สี) ปรับทุกตัวเลือกด้วยค่าเดียวกัน — เดิมถูกข้ามทำให้ยอดไม่เปลี่ยน
+          p.variants.forEach(v => {
+            const old = +v.stock || 0;
+            v.stock = mode === 'SET' ? Math.max(0, roundStock(val)) : Math.max(0, roundStock(old + val));
+            changedVariants++;
+            seq++;
+            if (v.id) window.enqueueSync({ type: 'adjust', payload: { variantId: v.id, value: v.stock,
+              reason: 'ปรับจำนวนหลายรายการ', opRef: 'ADJ-' + stamp + '-' + window.getDeviceId() + '-' + seq } }, true);
+          });
+          changedProducts++;
         });
+        if (!changedVariants) return window.showAlert?.('ไม่มีรายการที่ปรับได้', 'สินค้าที่เลือกไม่มีตัวเลือก (ขนาด/สี) ให้ปรับจำนวน', true);
         window.persist?.();
         window.closeModal('modal-bulk-stock');
         window.clearStockSelection();
         window.renderStockTable();
         window.renderSaleHome?.();
-        window.showToast?.(`ปรับจำนวนคงเหลือ ${changed} รายการ` + (skippedMulti ? ` • ข้าม ${skippedMulti} สินค้าหลายขนาด` : ''));
+        window.showToast?.(`ปรับจำนวนคงเหลือ ${changedProducts} สินค้า (${changedVariants} ตัวเลือก)`);
         finishBulkSync('ปรับจำนวนคงเหลือ');
       };
 
@@ -4026,8 +4094,9 @@ window.formatMoney = formatMoney;
       window.onPOProductChange = function() {
         const pid = document.getElementById('po-product-picker-value').value;
         const p = db.products[pid];
-        if (p && p.variants[0]) {
-          document.getElementById('po-item-cost').value = p.variants[0].cost;
+        const _pv = p && ((p.variants || []).find(x => x.id === window._poPickedVariantId) || (p.variants || [])[0]);
+        if (_pv) {
+          document.getElementById('po-item-cost').value = _pv.cost;
           document.getElementById('po-item-qty').value = 1;
         }
       };
@@ -4048,19 +4117,20 @@ window.formatMoney = formatMoney;
             return score(an) - score(bn) || naturalCompare(a.name, b.name);
           });
         }
-        matches = matches.slice(0, 40);
-
-        resultsEl.innerHTML = matches.length ? matches.map(p => {
-          const v = p.variants?.[0];
+        // หนึ่งแถวต่อหนึ่งขนาด/ตัวเลือก — เดิมรับเข้าได้เฉพาะขนาดแรก ทำให้สินค้ากลุ่มรับของไม่ครบ
+        const rows = [];
+        matches.forEach(p => (p.variants || []).forEach(v => rows.push({ p, v })));
+        const shown = rows.slice(0, 60);
+        resultsEl.innerHTML = shown.length ? shown.map(({ p, v }) => {
           const img = p.imageUrl
             ? `<img src="${escapeHTML(p.imageUrl)}" class="w-9 h-9 object-cover rounded-lg border flex-shrink-0">`
             : `<span class="w-9 h-9 flex items-center justify-center text-xl flex-shrink-0">${escapeHTML(p.image || '📦')}</span>`;
-          const stockLabel = v ? `${v.stock <= 0 ? '<span class="text-rose-500">หมด</span>' : `คงเหลือ ${v.stock}`}` : '';
+          const stockLabel = (+v.stock || 0) <= 0 ? '<span class="text-rose-500">หมด</span>' : `คงเหลือ ${v.stock}`;
           return `
-            <button type="button" onclick="window.selectPOProduct('${p.id}')" class="w-full flex items-center gap-2 p-2 hover:bg-indigo-50 text-left border-b last:border-0 btn-touch">
+            <button type="button" onclick="window.selectPOProduct('${p.id}','${v.id}')" class="w-full flex items-center gap-2 p-2 hover:bg-indigo-50 text-left border-b last:border-0 btn-touch">
               ${img}
               <div class="flex-1 min-w-0">
-                <div class="font-bold text-xs text-slate-800 truncate">${escapeHTML(p.name)} ${v ? `<span class="text-slate-400 font-normal">(${escapeHTML(v.sizeName)})</span>` : ''}</div>
+                <div class="font-bold text-xs text-slate-800 truncate">${escapeHTML(p.name)} <span class="text-slate-400 font-normal">(${escapeHTML(v.sizeName)})</span></div>
                 <div class="text-[10px] text-slate-400">SKU: ${escapeHTML(p.code || '-')} • ${stockLabel}</div>
               </div>
             </button>`;
@@ -4068,11 +4138,13 @@ window.formatMoney = formatMoney;
         resultsEl.classList.remove('hidden');
       };
 
-      window.selectPOProduct = function(pid) {
+      window.selectPOProduct = function(pid, vid) {
         const p = db.products[pid];
         if (!p) return;
+        const _v = (p.variants || []).find(x => x.id === vid) || (p.variants || [])[0];
+        window._poPickedVariantId = _v ? _v.id : null;
         document.getElementById('po-product-picker-value').value = pid;
-        document.getElementById('po-product-search').value = p.name + (p.variants?.[0] ? ` (${p.variants[0].sizeName})` : '');
+        document.getElementById('po-product-search').value = p.name + (_v ? ` (${_v.sizeName})` : '');
         document.getElementById('po-product-picker-results').classList.add('hidden');
         window.onPOProductChange();
       };
@@ -4210,7 +4282,10 @@ window.formatMoney = formatMoney;
         if (!pid || qty <= 0) return window.showAlert ? window.showAlert("ข้อมูลไม่ครบ", "กรุณาค้นหาและเลือกสินค้า พร้อมระบุจำนวนให้ถูกต้อง", true) : alert("กรุณาเลือกสินค้าและระบุจำนวนให้ถูกต้อง");
 
         const p = db.products[pid];
-        poTempItems.push({ productId: pid, productName: p.name, qty, cost, total: roundAmt(qty * cost) });
+        const _pv = p && ((p.variants || []).find(x => x.id === window._poPickedVariantId) || (p.variants || [])[0]);
+        if (!p || !_pv) return window.showAlert?.('สินค้าไม่มีขนาด/ตัวเลือก', 'สินค้านี้ยังไม่มีขนาดหรือตัวเลือกให้รับเข้าสต็อก กรุณาเพิ่มในหน้าแก้ไขสินค้าก่อน', true);
+        poTempItems.push({ productId: pid, variantId: _pv.id, productName: p.name + ((p.variants || []).length > 1 ? ` (${_pv.sizeName})` : ''), qty, cost, total: roundAmt(qty * cost) });
+        window._poPickedVariantId = null;
         window.renderPOCartList();
 
         // Reset the picker so the next item can be searched for immediately.
@@ -4254,6 +4329,10 @@ window.formatMoney = formatMoney;
         document.getElementById('set-store-address').value = db.storeAddress;
         document.getElementById('set-promptpay').value = db.promptPayId;
         document.getElementById('set-tax-id').value = db.taxId || '';
+        { const _st = db.settings || {};
+          const _vr = document.getElementById('set-vat-registered'); if (_vr) _vr.checked = !!_st.vatRegistered;
+          const _vt = document.getElementById('set-vat-rate'); if (_vt) _vt.value = (_st.vatRate != null ? _st.vatRate : 7);
+          const _vb = document.getElementById('set-vat-branch'); if (_vb) _vb.value = _st.vatBranch || 'สำนักงานใหญ่'; }
         const _pn = document.getElementById('set-prevent-negative'); if (_pn) _pn.checked = !!(db.settings && db.settings.preventNegativeStock);
         document.getElementById('set-supabase-url').value = window.getConfiguredSupabaseUrl();
         document.getElementById('set-supabase-key').value = window.getConfiguredSupabaseAnonKey();
@@ -4289,6 +4368,12 @@ window.formatMoney = formatMoney;
         db.taxId = document.getElementById('set-tax-id').value.trim();
         db.settings = db.settings || {};
         db.settings.preventNegativeStock = !!document.getElementById('set-prevent-negative')?.checked;
+        { const reg = !!document.getElementById('set-vat-registered')?.checked;
+          const rate = parseFloat(document.getElementById('set-vat-rate')?.value);
+          if (reg && !/^\d{13}$/.test(db.taxId || '')) return window.showAlert?.('เลขประจำตัวผู้เสียภาษีไม่ถูกต้อง', 'ถ้าจดทะเบียน VAT ต้องกรอกเลขประจำตัวผู้เสียภาษี 13 หลัก', true);
+          if (reg && (isNaN(rate) || rate <= 0 || rate > 30)) return window.showAlert?.('อัตรา VAT ไม่ถูกต้อง', 'กรุณากรอกอัตรา VAT เช่น 7', true);
+          db.settings.vatRegistered = reg; db.settings.vatRate = isNaN(rate) ? 7 : rate;
+          db.settings.vatBranch = (document.getElementById('set-vat-branch')?.value || '').trim() || 'สำนักงานใหญ่'; }
         document.getElementById('store-name-title').innerText = db.storeName;
         window.persist?.();
         window.showToast?.("บันทึกข้อมูลร้านค้าเรียบร้อยแล้ว");
@@ -5039,6 +5124,10 @@ window.formatMoney = formatMoney;
     });
     if(viewId==='stock') window.renderStockTable?.();
     if(viewId==='history') window.renderSalesAR?.();
+    if(viewId==='report'){
+      if(window.canDo && !window.canDo('ALL')){ window.showAlert?.('ไม่มีสิทธิ์','รายงานดูได้เฉพาะเจ้าของร้านหรือผู้ที่ได้รับสิทธิ์ทั้งหมด',true); return window.showView('sale'); }
+      var _rf=document.getElementById('report-from'); if(_rf && !_rf.value){ window.setReportRange('today'); } else { window.renderReport?.(); }
+    }
     if(viewId==='po-receive') {
       window.renderPOPicker?.();
       window.populatePOPickers?.();
@@ -6056,7 +6145,7 @@ window.deleteProduct = async id => {
 // are now built directly into each row in window.renderStockTable() using the row's actual
 // product id, so they can never point at the wrong product.
 
-window.confirmReceivePO=async function(){if(!ok('GOODS_RECEIPT'))return;const supplierId=document.getElementById('po-supplier-select').value;let docRef=document.getElementById('po-doc-ref').value.trim();const terms=parseInt(document.getElementById('po-credit-terms').value)||30;if(!supplierId)return window.showAlert?.('ข้อมูลไม่ครบ','กรุณาเลือกซัพพลายเออร์',true);if(!poTempItems?.length)return window.showAlert?.('ไม่มีรายการ','กรุณาเพิ่มรายการรับสินค้า',true);
+window.confirmReceivePO=async function(){if(!ok('GOODS_RECEIPT'))return;const supplierId=document.getElementById('po-supplier-select').value;let docRef=document.getElementById('po-doc-ref').value.trim();const terms=parseInt(document.getElementById('po-credit-terms').value)||30;if(!supplierId)return window.showAlert?.('ข้อมูลไม่ครบ','กรุณาเลือกซัพพลายเออร์',true);if(!poTempItems?.length)return window.showAlert?.('ไม่มีรายการ','กรุณาเพิ่มรายการรับสินค้า',true);if((document.getElementById('po-pay-mode')?.value)==='CASH'&&!db.currentShift)return window.showAlert?.('ยังไม่ได้เปิดกะ','การจ่ายสดจากลิ้นชักต้องเปิดกะก่อน หรือเลือกวิธีชำระอื่น',true);
   // เลขที่ใบส่งของ is now optional — if the supplier's own delivery-note number wasn't typed
   // in, run our own sequential number automatically rather than blocking the whole receipt.
   if(!docRef){docRef=window.getGoodsReceiptNumber();document.getElementById('po-doc-ref').value=docRef;}
@@ -6074,7 +6163,7 @@ window.confirmReceivePO=async function(){if(!ok('GOODS_RECEIPT'))return;const su
       try{
         if(c){
           const blob=await (await fetch(f.dataUrl)).blob();
-          const path=`${Date.now()}_${i}_${(docRef||'note').replace(/[^a-zA-Z0-9ก-๙_-]/g,'_')}.${ext}`;
+          const _tok=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2));const path=`${_tok}_${Date.now()}_${i}.${ext}`;
           const{error:upErr}=await c.storage.from('delivery-notes').upload(path,blob,{contentType:f.mime,upsert:true});
           if(!upErr){const{data}=c.storage.from('delivery-notes').getPublicUrl(path);receipt.deliveryNoteUrls.push(data.publicUrl);}
           else{receipt.deliveryNoteUrls.push(f.dataUrl);console.warn('delivery note upload failed, kept locally',upErr);}
@@ -6084,7 +6173,7 @@ window.confirmReceivePO=async function(){if(!ok('GOODS_RECEIPT'))return;const su
       }catch(e){receipt.deliveryNoteUrls.push(f.dataUrl);console.warn('delivery note upload error, kept locally',e);}
     }
   }
-  db.purchaseOrders=db.purchaseOrders||[];db.purchaseOrders.push(receipt);for(const x of poTempItems){const p=db.products[x.productId],v=p?.variants?.[0];if(v){{const _os=Math.max(0,+v.stock||0),_q=+x.qty||0,_nc=+x.cost||0;if(_nc>0){v.cost=_os>0?roundAmt((_os*(+v.cost||0)+_q*_nc)/(_os+_q)):_nc;}v.stock=(+v.stock||0)+_q;}}}db.cashLedger=db.cashLedger||[];const apEntry={id:'AP-'+Date.now(),type:'ACCOUNTS_PAYABLE',supplierId,docRef,amount:poTempItems.reduce((a,x)=>a+x.total,0),terms,status:'OPEN',createdAt:receipt.receivedAt};db.cashLedger.push(apEntry);persist();const itemsForSync=receipt.items;poTempItems.length=0;window.renderPOCartList();window.renderStockTable();window.renderPurchaseHistory();window.clearDeliveryNote?.();window.showToast?.('รับสินค้าเข้าคลังและบันทึกเจ้าหนี้สำเร็จ');document.getElementById('po-doc-ref').value='';
+  db.purchaseOrders=db.purchaseOrders||[];db.purchaseOrders.push(receipt);for(const x of poTempItems){const p=db.products[x.productId],v=(p?.variants||[]).find(y=>y.id===x.variantId)||p?.variants?.[0];if(v){{const _os=Math.max(0,+v.stock||0),_q=+x.qty||0,_nc=+x.cost||0;if(_nc>0){v.cost=_os>0?roundAmt((_os*(+v.cost||0)+_q*_nc)/(_os+_q)):_nc;}v.stock=(+v.stock||0)+_q;}}}db.cashLedger=db.cashLedger||[];const _payMode=document.getElementById('po-pay-mode')?.value||'CREDIT';const _apTotal=roundAmt(poTempItems.reduce((a,x)=>a+x.total,0));const apEntry={id:'AP-'+Date.now(),type:'ACCOUNTS_PAYABLE',supplierId,docRef,amount:_apTotal,terms,status:_payMode==='CREDIT'?'OPEN':'PAID',paidAt:_payMode==='CREDIT'?null:receipt.receivedAt,payMethod:_payMode,createdAt:receipt.receivedAt};db.cashLedger.push(apEntry);if(_payMode==='CASH'&&db.currentShift){db.currentShift.movements=db.currentShift.movements||[];db.currentShift.movements.push({id:'MV-'+Date.now()+'-ap',type:'OUT',amount:_apTotal,note:'ซื้อสินค้า '+docRef,time:Date.now()});}persist();const itemsForSync=receipt.items;poTempItems.length=0;window.renderPOCartList();window.renderStockTable();window.renderPurchaseHistory();window.clearDeliveryNote?.();window.showToast?.('รับสินค้าเข้าคลังและบันทึกเจ้าหนี้สำเร็จ');document.getElementById('po-doc-ref').value='';{const _pm=document.getElementById('po-pay-mode');if(_pm)_pm.value='CREDIT';}
   // Best-effort authoritative push to Supabase via the proper purchase_orders →
   // purchase_order_items → receive_purchase_order RPC flow (the schema's real, atomic
   // receiving path — it locks rows, validates received quantity against ordered quantity, and
@@ -6094,7 +6183,7 @@ window.confirmReceivePO=async function(){if(!ok('GOODS_RECEIPT'))return;const su
   // OWNER or MANAGER app_user (enforced by is_manager() inside the function itself) — this
   // silently no-ops (logged to console only) if that's not the case, same as every other
   // background sync in this app.
-  window.enqueueSync({type:'receive',payload:{receiptId:receipt.id,apId:apEntry.id}});
+  window.enqueueSync({type:'receive',payload:{receiptId:receipt.id,apId:apEntry.id,payNow:apEntry.status==='PAID'}});
 };
 
 window.syncGoodsReceiptToSupabase=function(receipt,supplierId,docRef,terms,apEntry){window.enqueueSync({type:'receive',payload:{receiptId:receipt.id,apId:apEntry&&apEntry.id}});};
@@ -6149,7 +6238,7 @@ window.renderPurchaseHistory=function(){
     }).join(''):`<p class="text-center text-slate-400 font-bold py-6">ไม่มีรายการเจ้าหนี้ค้างชำระ</p>`;
   }
 };
-window.markAPPaid=function(id){if(!ok('ALL')&&!ok('GOODS_RECEIPT'))return;const ap=(db.cashLedger||[]).find(x=>x.id===id);if(!ap)return;ap.status='PAID';ap.paidAt=new Date().toISOString();persist();window.renderPurchaseHistory();window.showToast?.('บันทึกการชำระเงินเรียบร้อย');};
+window.markAPPaid=function(id){if(!ok('ALL')&&!ok('GOODS_RECEIPT'))return;const ap=(db.cashLedger||[]).find(x=>x.id===id);if(!ap||ap.status==='PAID')return;if(!confirm('ยืนยันจ่ายเจ้าหนี้ '+formatMoney(ap.amount)+' ?'))return;let viaDrawer=false;if(db.currentShift&&confirm('จ่ายเป็นเงินสดจากลิ้นชักในกะนี้หรือไม่?\n\nตกลง = จ่ายจากลิ้นชัก (บันทึกเงินออกในกะ)\nยกเลิก = จ่ายด้วยวิธีอื่น เช่น โอน (ไม่กระทบเงินในลิ้นชัก)')){db.currentShift.movements=db.currentShift.movements||[];db.currentShift.movements.push({id:'MV-'+Date.now()+'-ap',type:'OUT',amount:roundAmt(ap.amount),note:'จ่ายเจ้าหนี้ '+(ap.docRef||''),time:Date.now()});viaDrawer=true;}ap.status='PAID';ap.paidAt=new Date().toISOString();ap.payMethod=viaDrawer?'CASH':'OTHER';persist();window.renderPurchaseHistory();window.showToast?.('บันทึกการชำระเงินเรียบร้อย');window.syncTransactionsToSupabase?.(true);};
 
 document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTable?.();});
 })();
@@ -7323,7 +7412,7 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
         debt[p.customerId] = (debt[p.customerId] || 0) - (+p.amount || 0);
       } else if (op.type === 'receive') {
         const r = (db.purchaseOrders || []).find(x => x.id === p.receiptId); if (!r) return;
-        (r.items || []).forEach(x => { const v = db.products[x.productId]?.variants?.[0]; if (v && v.id) { const k = toUUID(v.id); stock[k] = (stock[k] || 0) + (+x.qty || 0); } });
+        (r.items || []).forEach(x => { const v = ((db.products[x.productId]?.variants || []).find(y => y.id === x.variantId) || db.products[x.productId]?.variants?.[0]); if (v && v.id) { const k = toUUID(v.id); stock[k] = (stock[k] || 0) + (+x.qty || 0); } });
       }
     });
     return { stock, debt };
@@ -7386,11 +7475,11 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
       p_user_id: bill.cashierId ? toUUID(bill.cashierId) : null,
       p_shift_id: bill.shiftId ? toUUID(bill.shiftId) : null,
       p_discount_amount: +bill.discount || 0,
-      p_tax_amount: 0,
+      p_tax_amount: +bill.vatAmount || 0,
       p_payment_method: bill.method || 'CASH',
       p_items: items,
       p_allow_negative: !window.isPreventNegativeStock(),
-      p_tax_mode: 'NONE',
+      p_tax_mode: bill.taxMode || 'NONE',
       p_expected_total: +bill.total,
       p_created_at: (bill.time ? new Date(bill.time).toISOString() : null)
     });
@@ -7448,13 +7537,13 @@ document.addEventListener('DOMContentLoaded',()=>{ensure();window.renderStockTab
       if (se) throw se;
     }
     const items = (r.items || []).map(x => {
-      const v = db.products[x.productId]?.variants?.[0];
+      const v = ((db.products[x.productId]?.variants || []).find(y => y.id === x.variantId) || db.products[x.productId]?.variants?.[0]);
       return { product_id: toUUID(x.productId), variant_id: v && v.id ? toUUID(v.id) : null, quantity: +x.qty, unit_cost: +x.cost || 0 };
     });
     const { data, error } = await c.rpc('receive_goods', {
       p_client_ref: r.id, p_supplier_id: toUUID(r.supplierId), p_doc_ref: r.docRef || null,
       p_terms: r.terms || 30, p_received_at: r.receivedAt || null, p_items: items,
-      p_ap_id: p.apId ? toUUID(p.apId) : null
+      p_ap_id: p.apId ? toUUID(p.apId) : null, p_pay_now: !!p.payNow
     });
     if (error) throw error;
     const ap = (db.cashLedger || []).find(x => x.id === p.apId);
@@ -7828,5 +7917,136 @@ document.addEventListener('mouseout',function(e){ if(e.target.closest&&e.target.
 window.__headerTips={TIPS:TIPS};
 })();
 </script>
+
+    <script>
+    (function () {
+      'use strict';
+      var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); };
+      var num = function (v) { return Number(v) || 0; };
+      var money = function (v) { return '฿' + num(v).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+      var todayTH = function () { return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }); };
+      var addDays = function (iso, n) { var d = new Date(iso + 'T00:00:00+07:00'); d.setUTCDate(d.getUTCDate() + n); return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }); };
+      var lastDaily = [];
+
+      window.setReportRange = function (kind) {
+        var t = todayTH(), from = t;
+        if (kind === '7d') from = addDays(t, -6);
+        if (kind === 'month') from = t.slice(0, 8) + '01';
+        document.getElementById('report-from').value = from;
+        document.getElementById('report-to').value = t;
+        window.renderReport();
+      };
+
+      async function fetchAll(makeQuery, maxPages) {
+        var out = [], page = 1000;
+        for (var i = 0; i < (maxPages || 30); i++) {
+          var r = await makeQuery().range(i * page, i * page + page - 1);
+          if (r.error) throw r.error;
+          out = out.concat(r.data || []);
+          if (!r.data || r.data.length < page) break;
+        }
+        return out;
+      }
+
+      function row(label, value, cls) {
+        return '<div class="flex justify-between text-xs py-1 border-b"><span class="text-slate-500">' + label + '</span><b class="tabular-nums ' + (cls || 'text-slate-800') + '">' + value + '</b></div>';
+      }
+      function card(title, inner) {
+        return '<div class="bg-white p-4 rounded-3xl border shadow-sm"><h4 class="text-sm font-extrabold text-slate-800 border-b pb-2 mb-2">' + title + '</h4>' + inner + '</div>';
+      }
+
+      window.renderReport = async function () {
+        var body = document.getElementById('report-body');
+        if (!body) return;
+        var c = window.getSupabaseClient && window.getSupabaseClient();
+        if (!c) { body.innerHTML = card('ยังไม่ได้เชื่อมต่อ', '<p class="text-xs text-slate-500">ตั้งค่า Supabase และเข้าสู่ระบบก่อน รายงานดึงจากฐานข้อมูลกลางเพื่อให้ตัวเลขตรงกับบัญชี</p>'); return; }
+        if (navigator.onLine === false) { body.innerHTML = card('ออฟไลน์', '<p class="text-xs text-slate-500">รายงานต้องใช้อินเทอร์เน็ต</p>'); return; }
+        var fromEl = document.getElementById('report-from'), toEl = document.getElementById('report-to');
+        if (!fromEl.value || !toEl.value) { fromEl.value = fromEl.value || todayTH(); toEl.value = toEl.value || todayTH(); }
+        var from = fromEl.value, to = toEl.value;
+        if (from > to) { body.innerHTML = card('ช่วงวันที่ไม่ถูกต้อง', '<p class="text-xs text-rose-600">วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด</p>'); return; }
+        var startISO = new Date(from + 'T00:00:00+07:00').toISOString();
+        var endISO = new Date(addDays(to, 1) + 'T00:00:00+07:00').toISOString();
+        body.innerHTML = '<p class="text-center text-xs font-bold text-slate-400 py-6">กำลังโหลดรายงาน…</p>';
+        try {
+          var pending = ((window.db && window.db.syncQueue) || []).filter(function (o) { return o.status !== 'done'; }).length;
+          var res = await Promise.all([
+            fetchAll(function () { return c.from('v_daily_sales').select('*').gte('day', from).lte('day', to).order('day', { ascending: false }); }, 5),
+            fetchAll(function () { return c.from('bills').select('id,payment_method,total,tax_amount,tax_mode,created_at').gte('created_at', startISO).lt('created_at', endISO).order('created_at'); }, 30),
+            fetchAll(function () { return c.from('v_shift_summary').select('*').gte('opened_at', startISO).lt('opened_at', endISO).order('opened_at', { ascending: false }); }, 5),
+            fetchAll(function () { return c.from('v_customer_ar').select('name,debt').order('debt', { ascending: false }); }, 5),
+            fetchAll(function () { return c.from('v_ap_open').select('supplier,amount,due_date').order('due_date'); }, 5),
+            fetchAll(function () { return c.from('v_stock_valuation').select('stock_value').order('variant_id'); }, 30)
+          ]);
+          var daily = res[0], bills = res[1], shifts = res[2], ar = res[3], ap = res[4], stock = res[5];
+          lastDaily = daily;
+          var t = { bills: 0, gross: 0, disc: 0, net: 0, refunds: 0, cogs: 0, profit: 0 };
+          daily.forEach(function (d) { t.bills += num(d.bills); t.gross += num(d.gross_sales); t.disc += num(d.discounts); t.net += num(d.net_sales); t.refunds += num(d.refunds); t.cogs += num(d.cogs); t.profit += num(d.gross_profit); });
+          var netAfter = t.net - t.refunds;
+          var margin = netAfter > 0 ? (t.profit / netAfter * 100) : 0;
+          var byMethod = {}, vat = 0;
+          bills.forEach(function (b) { var m = b.payment_method || 'CASH'; byMethod[m] = (byMethod[m] || 0) + num(b.total); if (b.tax_mode && b.tax_mode !== 'NONE') vat += num(b.tax_amount); });
+          var methodName = { CASH: 'เงินสด', TRANSFER: 'โอนเงิน', QR: 'QR/พร้อมเพย์', CARD: 'บัตร', CREDIT: 'ขายเชื่อ (ตั้งลูกหนี้)' };
+          var arTotal = ar.reduce(function (a, x) { return a + num(x.debt); }, 0);
+          var apTotal = ap.reduce(function (a, x) { return a + num(x.amount); }, 0);
+          var today = todayTH();
+          var apOver = ap.filter(function (x) { return x.due_date && x.due_date < today; });
+          var stockValue = stock.reduce(function (a, x) { return a + num(x.stock_value); }, 0);
+
+          var html = '';
+          if (pending) html += '<div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs font-bold text-amber-700">⚠️ มี ' + pending + ' รายการรอซิงค์ ยังไม่รวมในรายงานนี้ — ซิงค์ให้เสร็จก่อนแล้วกด “แสดงรายงาน” อีกครั้ง</div>';
+          html += card('สรุปยอดขาย ' + esc(from) + ' ถึง ' + esc(to),
+            row('จำนวนบิล', t.bills.toLocaleString('th-TH')) +
+            row('ยอดขายก่อนลด', money(t.gross)) +
+            row('ส่วนลด', '-' + money(t.disc), 'text-rose-600') +
+            row('ยอดขายสุทธิ', money(t.net)) +
+            row('คืนสินค้า/ยกเลิกบิล', '-' + money(t.refunds), 'text-rose-600') +
+            row('ยอดขายหลังหักคืน', money(netAfter), 'text-indigo-600') +
+            row('ต้นทุนขาย (ตามวันที่ขายจริง)', '-' + money(t.cogs), 'text-rose-600') +
+            row('กำไรขั้นต้น', money(t.profit), t.profit >= 0 ? 'text-emerald-600' : 'text-rose-600') +
+            row('อัตรากำไรขั้นต้น', margin.toFixed(1) + '%') +
+            (vat > 0 ? row('ภาษีขายที่รวมในยอด (VAT)', money(vat)) : ''));
+          html += card('แยกตามวิธีชำระ (ยอดบิล)',
+            Object.keys(byMethod).length ? Object.keys(byMethod).sort().map(function (m) { return row(esc(methodName[m] || m), money(byMethod[m])); }).join('') : '<p class="text-xs text-slate-400">ไม่มีบิลในช่วงนี้</p>');
+          html += card('ภาพรวม ณ ปัจจุบัน',
+            row('ลูกหนี้ค้างชำระรวม (' + ar.length + ' ราย)', money(arTotal), arTotal > 0 ? 'text-rose-600' : undefined) +
+            row('เจ้าหนี้ค้างจ่ายรวม (' + ap.length + ' ใบ)', money(apTotal), apTotal > 0 ? 'text-amber-600' : undefined) +
+            row('เจ้าหนี้เกินกำหนดจ่าย', apOver.length + ' ใบ / ' + money(apOver.reduce(function (a, x) { return a + num(x.amount); }, 0)), apOver.length ? 'text-rose-600' : undefined) +
+            row('มูลค่าสต็อกคงเหลือ (ตามต้นทุน)', money(stockValue)));
+          if (ar.length) html += card('ลูกหนี้ค้างชำระ', ar.slice(0, 15).map(function (x) { return row(esc(x.name), money(x.debt), 'text-rose-600'); }).join('') + (ar.length > 15 ? '<p class="text-[10px] text-slate-400 pt-1">แสดง 15 รายแรกจาก ' + ar.length + '</p>' : ''));
+          html += card('รายวัน <button onclick="window.exportReportCsv()" class="float-right text-[10px] text-indigo-600 font-bold underline">ดาวน์โหลด CSV</button>',
+            daily.length ? daily.map(function (d) {
+              return '<div class="flex justify-between text-[11px] py-1 border-b"><span class="font-bold text-slate-600">' + esc(d.day) + ' <span class="text-slate-400 font-normal">(' + num(d.bills) + ' บิล)</span></span><span class="tabular-nums"><b>' + money(d.net_after_returns) + '</b> <span class="' + (num(d.gross_profit) >= 0 ? 'text-emerald-600' : 'text-rose-600') + '">กำไร ' + money(d.gross_profit) + '</span></span></div>';
+            }).join('') : '<p class="text-xs text-slate-400">ไม่มีข้อมูลในช่วงนี้</p>');
+          html += card('ผลปิดกะ (เงินสดในลิ้นชัก)',
+            shifts.length ? shifts.map(function (sh) {
+              var closed = sh.status === 'CLOSED', v = num(sh.cash_variance);
+              return '<div class="text-[11px] py-1.5 border-b"><div class="flex justify-between"><b class="text-slate-700">' + esc(new Date(sh.opened_at).toLocaleString('th-TH')) + '</b><span class="' + (closed ? 'text-slate-500' : 'text-amber-600') + ' font-bold">' + (closed ? 'ปิดแล้ว' : 'ยังเปิดอยู่') + '</span></div>' +
+                '<div class="flex justify-between text-slate-500"><span>ควรมี ' + money(closed ? sh.expected_cash : sh.expected_now) + (closed ? ' • นับได้ ' + money(sh.closing_cash) : '') + '</span>' +
+                (closed ? '<b class="' + (v === 0 ? 'text-emerald-600' : 'text-rose-600') + '">' + (v === 0 ? 'ตรง' : (v > 0 ? 'เกิน ' : 'ขาด ') + money(Math.abs(v))) + '</b>' : '') + '</div>' +
+                (sh.close_note ? '<div class="text-slate-400">หมายเหตุ: ' + esc(sh.close_note) + '</div>' : '') + '</div>';
+            }).join('') : '<p class="text-xs text-slate-400">ไม่มีกะในช่วงนี้</p>');
+          body.innerHTML = html;
+        } catch (e) {
+          console.error('report failed', e);
+          body.innerHTML = card('โหลดรายงานไม่สำเร็จ', '<p class="text-xs text-rose-600 break-words">' + esc(e && e.message ? e.message : e) + '</p><p class="text-[10px] text-slate-400 mt-2">ตรวจว่ารัน SMART-POS-SETUP-v2.sql แล้ว และล็อกอินด้วยบัญชีที่ได้รับสิทธิ์</p>');
+        }
+      };
+
+      window.exportReportCsv = function () {
+        if (!lastDaily.length) return;
+        var head = ['วันที่', 'จำนวนบิล', 'ยอดขายก่อนลด', 'ส่วนลด', 'ยอดขายสุทธิ', 'คืนสินค้า', 'ยอดขายหลังหักคืน', 'ต้นทุนขาย', 'กำไรขั้นต้น'];
+        var lines = [head.join(',')].concat(lastDaily.slice().reverse().map(function (d) {
+          return [d.day, d.bills, d.gross_sales, d.discounts, d.net_sales, d.refunds, d.net_after_returns, d.cogs, d.gross_profit].join(',');
+        }));
+        var blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'report-' + document.getElementById('report-from').value + '_' + document.getElementById('report-to').value + '.csv';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+      };
+    })();
+    </script>
 </body>
 </html>
