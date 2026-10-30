@@ -1904,6 +1904,7 @@ window.formatMoney = formatMoney;
         progressWrap.classList.remove('hidden');
 
         let successCount = 0;
+        let skippedNoUpload = 0;
         let processedCount = 0;
         const client = window.getSupabaseClient();
 
@@ -1936,6 +1937,8 @@ window.formatMoney = formatMoney;
 
           if (publicUrl) {
             p.imageUrl = publicUrl;
+          } else if (entries.length > 30) {
+            skippedNoUpload++; continue;   // รูปจำนวนมากเก็บเป็น base64 ในเครื่องไม่ได้ (เกินโควตา 5MB ทำให้ข้อมูลหาย) ต้องอัปโหลดขึ้น Supabase เท่านั้น
           } else {
             // BUG FIX: เดิม fallback เป็น URL.createObjectURL(file) ซึ่งเป็น blob: URL ที่ใช้ได้
             // แค่ในแท็บ/เซสชันปัจจุบันเท่านั้น — พอ persist() ลง localStorage แล้วรีเฟรชหน้าเว็บ
@@ -1955,10 +1958,11 @@ window.formatMoney = formatMoney;
         btn.disabled = false;
         btn.innerText = "🚀 เริ่มจับคู่และนำเข้ารูปภาพ";
         window.persist?.();
+        window.syncProductsToSupabase?.(true);   // ส่ง image_url ขึ้นเซิร์ฟเวอร์ให้เครื่องอื่นเห็นรูปด้วย
         window.closeModal('modal-bulk-image');
         window.renderStockTable();
         window.renderSaleHome?.();
-        window.showAlert("นำเข้ารูปภาพเรียบร้อย", `จับคู่และอัปโหลดรูปภาพสำเร็จ ${successCount} รายการ จากทั้งหมด ${entries.length} รายการ`, false);
+        window.showAlert("นำเข้ารูปภาพเรียบร้อย", `จับคู่และอัปโหลดรูปภาพสำเร็จ ${successCount} รายการ จากทั้งหมด ${entries.length} รายการ` + (skippedNoUpload ? ` — ข้าม ${skippedNoUpload} รายการที่อัปโหลดขึ้น Supabase ไม่สำเร็จ (ตรวจการเชื่อมต่อ/สิทธิ์ แล้วทำซ้ำได้ รายการที่สำเร็จแล้วจะถูกอัปโหลดใหม่ทับ)` : ''), skippedNoUpload > 0);
       };
 
       // ==========================================
@@ -4549,7 +4553,7 @@ window.formatMoney = formatMoney;
         });
         const list = [...groups.values()];
         const nVar = list.reduce((a, g) => a + g.variants.length, 0), nFrac = okSubs.length, nPhoto = list.filter(g => g.img).length;
-        return { groups: list, rejected: rejected.sort((a, b) => a.line - b.line), stats: { groups: list.length, variants: nVar, fractions: nFrac, photos: nPhoto, rejected: rejected.length, total: rows.length } };
+        return { groups: list, rejected: rejected.sort((a, b) => a.line - b.line), stats: { groups: list.length, variants: nVar, fractions: nFrac, photos: nPhoto, rejected: rejected.length, total: rows.length, noCost: list.reduce((a, g) => a + g.variants.filter(v => !(v.cost > 0)).length, 0) } };
       }
 
       function renderImportPreview(plan){
@@ -4561,6 +4565,7 @@ window.formatMoney = formatMoney;
           <div class="p-3 text-xs bg-indigo-50 border-b leading-relaxed">
             ผ่านการตรวจ <b class="text-emerald-700">${s.variants + s.fractions}</b> แถว (สินค้า <b>${s.groups}</b> กลุ่ม • ขนาด <b>${s.variants}</b> • หน่วยย่อย <b>${s.fractions}</b> • มีรูป <b>${s.photos}</b> กลุ่ม)<br>
             ไม่ผ่าน <b class="text-rose-700">${s.rejected}</b> แถว จากทั้งหมด ${s.total} แถว — แถวที่ไม่ผ่านจะถูกข้าม ไม่นำเข้า
+            ${s.noCost ? `<br><span class="text-amber-700 font-bold">⚠️ ราคาทุนว่าง ${s.noCost} รายการ — ระบบจะบันทึกทุน 0 ทำให้กำไรสูงเกินจริง ควรกรอกทุนก่อนใช้จริง</span>` : ''}
           </div>
           ${plan.rejected.length ? `<div class="max-h-48 overflow-y-auto"><table class="w-full text-left text-xs"><thead class="bg-rose-50 font-bold"><tr><th class="p-2">แถว</th><th class="p-2">ชื่อ</th><th class="p-2">เหตุผล</th></tr></thead><tbody>${rej}</tbody></table></div>` : '<div class="p-3 text-xs text-emerald-700">✅ ทุกแถวผ่านการตรวจ</div>'}`;
         const confirmBtn = document.querySelector('[onclick*="confirmOpeningStockImport"]');
@@ -4663,6 +4668,7 @@ window.formatMoney = formatMoney;
 
       window.confirmOpeningStockImport = async function(){
         if (!pendingImportList.length) return;
+        window.seedYojiCategories?.();   // หมวดหลัก/ย่อยตามผังเว็บ ไฟล์นำเข้าจะจับคู่เข้าหมวดเดิม ไม่สร้างหมวดซ้ำ
 
         db.categories = db.categories || [];
         const ensureCat = (name, parentId) => {
@@ -7979,6 +7985,8 @@ window.__headerTips={TIPS:TIPS};
             fetchAll(function () { return c.from('v_stock_valuation').select('stock_value').order('variant_id'); }, 30)
           ]);
           var daily = res[0], bills = res[1], shifts = res[2], ar = res[3], ap = res[4], stock = res[5];
+          var zc = await c.from('product_variants').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('cost_price', 0);
+          var zeroCost = (zc && !zc.error && typeof zc.count === 'number') ? zc.count : 0;
           lastDaily = daily;
           var t = { bills: 0, gross: 0, disc: 0, net: 0, refunds: 0, cogs: 0, profit: 0 };
           daily.forEach(function (d) { t.bills += num(d.bills); t.gross += num(d.gross_sales); t.disc += num(d.discounts); t.net += num(d.net_sales); t.refunds += num(d.refunds); t.cogs += num(d.cogs); t.profit += num(d.gross_profit); });
@@ -7995,6 +8003,7 @@ window.__headerTips={TIPS:TIPS};
 
           var html = '';
           if (pending) html += '<div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs font-bold text-amber-700">⚠️ มี ' + pending + ' รายการรอซิงค์ ยังไม่รวมในรายงานนี้ — ซิงค์ให้เสร็จก่อนแล้วกด “แสดงรายงาน” อีกครั้ง</div>';
+          if (zeroCost > 0) html += '<div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs font-bold text-amber-700">⚠️ มีสินค้า ' + zeroCost.toLocaleString('th-TH') + ' รายการที่ยังไม่มีราคาทุน (ทุน = 0) — ต้นทุนขายและกำไรขั้นต้นในรายงานนี้จะสูงเกินจริง กรอกทุนในหน้าแก้ไขสินค้าหรือรับสินค้าเข้าด้วยราคาซื้อจริง</div>';
           html += card('สรุปยอดขาย ' + esc(from) + ' ถึง ' + esc(to),
             row('จำนวนบิล', t.bills.toLocaleString('th-TH')) +
             row('ยอดขายก่อนลด', money(t.gross)) +
